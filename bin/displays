@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""displays — CLI companion for ~/Applications/Displays.app.
+"""displays - CLI companion for ~/Applications/Displays.app.
 
 Reads ~/.config/displays/presets.json (organized by machine/classroom folder:
 84-101, 84-102, 84-105, etc.) and applies or lists displayplacer presets.
@@ -28,7 +28,7 @@ def cmd_list(folder_filter=None):
     for f in root.get("folders", []):
         if folder_filter and folder_filter.lower() not in f["name"].lower() and folder_filter.lower() not in f["id"].lower():
             continue
-        print(f"📁 {f['name']} — {f.get('description', '')}")
+        print(f"📁 {f['name']} · {f.get('description', '')}")
         for i, p in enumerate(f.get("presets", []), 1):
             mark = "●" if p["id"] == last_id else " "
             print(f"  {mark} [{i}] {p['name']}")

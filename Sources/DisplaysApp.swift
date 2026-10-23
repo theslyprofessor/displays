@@ -834,7 +834,7 @@ struct ConnectedDisplaysCard: View {
                         newPresetSubtitle = ""
                         showingSaveSheet = true
                     } label: {
-                        Label("Snapshot Current OS Layout…", systemImage: "camera")
+                        Label("Snapshot Current Layout…", systemImage: "camera")
                             .font(.system(size: 11))
                     }
                     .buttonStyle(.bordered)
@@ -1120,7 +1120,7 @@ struct MainPanelView: View {
             if let folder = store.selectedFolder {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("\(folder.name) — \(folder.description)")
+                        Text("\(folder.name) · \(folder.description)")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -1145,14 +1145,31 @@ struct MainPanelView: View {
                         }
                     }
 
-                    ScrollView {
+                    if isStandaloneWindow {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(folder.presets) { preset in
+                                    PresetRowView(folder: folder, preset: preset, store: store)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
+                    } else if folder.presets.count > 6 {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(folder.presets) { preset in
+                                    PresetRowView(folder: folder, preset: preset, store: store)
+                                }
+                            }
+                        }
+                        .frame(height: 340)
+                    } else {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(folder.presets) { preset in
                                 PresetRowView(folder: folder, preset: preset, store: store)
                             }
                         }
                     }
-                    .frame(maxHeight: isStandaloneWindow ? .infinity : 270)
                 }
             }
 
@@ -1198,8 +1215,8 @@ struct MainPanelView: View {
             }
         }
         .padding(12)
-        .frame(width: isStandaloneWindow ? nil : 520)
-        .frame(minWidth: 520, minHeight: isStandaloneWindow ? 640 : nil)
+        .frame(width: isStandaloneWindow ? nil : 550)
+        .frame(minWidth: 550, minHeight: isStandaloneWindow ? 640 : nil)
         .sheet(isPresented: $showingNewFolder) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("New Machine / Classroom Folder")
@@ -1237,7 +1254,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
         if window == nil {
             let rootView = MainPanelView(store: activeStore, isStandaloneWindow: true)
             let w = NSWindow(contentViewController: NSHostingController(rootView: rootView))
-            w.title = "Displays — Machine & Classroom Monitor Presets"
+            w.title = "Displays · Machine & Classroom Monitor Presets"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.setContentSize(NSSize(width: 600, height: 680))
             w.isReleasedWhenClosed = false
@@ -1250,44 +1267,111 @@ final class WindowManager: NSObject, NSWindowDelegate {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+    private var statusItem: NSStatusItem!
+    private var popover: NSPopover!
+    private var statusTimer: Timer?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        NSApp.setActivationPolicy(.accessory)
+
+        // Pin preferred position near the right side of the menu bar (next to Control Center / Clock)
+        // so that on a 1080p screen with 30+ menu bar icons, macOS never pushes Displays off the left edge.
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "NSStatusItem Preferred Position DisplaysStatusItem") == nil {
+            defaults.set(110.0, forKey: "NSStatusItem Preferred Position DisplaysStatusItem")
+        }
+        if defaults.object(forKey: "NSStatusItem Preferred Position Item-0") == nil {
+            defaults.set(110.0, forKey: "NSStatusItem Preferred Position Item-0")
+        }
+        defaults.synchronize()
+
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.autosaveName = "DisplaysStatusItem"
+        item.isVisible = true
+        self.statusItem = item
+
+        if let button = item.button {
+            let img = NSImage(systemSymbolName: "display.2", accessibilityDescription: "Displays")
+            img?.isTemplate = true
+            button.image = img
+            button.imagePosition = .imageLeading
+            button.title = " 101"
+            button.target = self
+            button.action = #selector(togglePopover(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+
+        let pop = NSPopover()
+        pop.behavior = .transient
+        pop.animates = true
+        pop.delegate = self
+        let hosting = NSHostingController(
+            rootView: MainPanelView(store: DisplayStore.shared, isStandaloneWindow: false)
+        )
+        hosting.sizingOptions = [.preferredContentSize, .intrinsicContentSize]
+        pop.contentViewController = hosting
+        self.popover = pop
+
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateStatusButtonTitle()
+            }
+        }
+        updateStatusButtonTitle()
+
+        // Pop open the menu bar popover on launch so you immediately see where the menu bar icon sits.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.showPopover()
+        }
+    }
+
+    func updateStatusButtonTitle() {
+        guard let button = statusItem?.button else { return }
+        if let detected = DisplayStore.shared.detectedFolderID {
+            let short = detected.replacingOccurrences(of: "84-", with: "")
+            button.title = " \(short)"
+        } else {
+            button.title = " Disp"
+        }
+    }
+
+    @objc func togglePopover(_ sender: AnyObject?) {
+        guard let pop = popover else { return }
+        if pop.isShown {
+            pop.performClose(sender)
+        } else {
+            showPopover()
+        }
+    }
+
+    func showPopover() {
+        guard let button = statusItem?.button, let pop = popover else {
+            WindowManager.shared.openMainWindow()
+            return
+        }
+        DisplayStore.shared.refreshDisplays()
+        if let hosting = pop.contentViewController as? NSHostingController<MainPanelView> {
+            let fit = hosting.sizeThatFits(in: NSSize(width: 550, height: 1200))
+            pop.contentSize = NSSize(width: max(550, fit.width), height: max(480, fit.height))
+        }
+        if button.window != nil && button.window!.frame.origin.x > 0 {
+            pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
             WindowManager.shared.openMainWindow()
         }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        WindowManager.shared.openMainWindow()
+        showPopover()
         return false
     }
 }
 
-struct MenuBarLabelView: View {
-    @ObservedObject var store: DisplayStore
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "display.2")
-            if let detected = store.detectedFolderID {
-                Text(detected.replacingOccurrences(of: "84-", with: ""))
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-            }
-        }
-    }
-}
-
-@main
-struct DisplaysApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = DisplayStore.shared
-
-    var body: some Scene {
-        MenuBarExtra {
-            MainPanelView(store: store, isStandaloneWindow: false)
-        } label: {
-            MenuBarLabelView(store: store)
-        }
-        .menuBarExtraStyle(.window)
-    }
+MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    let delegate = AppDelegate()
+    app.delegate = delegate
+    app.run()
 }

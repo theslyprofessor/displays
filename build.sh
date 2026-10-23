@@ -6,7 +6,7 @@ chmod +x bin/displays
 ln -sf "$PWD/bin/displays" ~/.local/bin/displays
 APP=~/Applications/Displays.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -swift-version 5 -parse-as-library -o "$APP/Contents/MacOS/Displays" Sources/DisplaysApp.swift
+swiftc -O -swift-version 5 -o "$APP/Contents/MacOS/Displays" Sources/DisplaysApp.swift
 cp app/Info.plist "$APP/Contents/Info.plist"
 IDENTITY=$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/{print $2; exit}')
 codesign --force --sign "${IDENTITY:--}" "$APP"
