@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Displays for Windows — Monitor History & Space Presets</title>
+  <title>ScreenStage for Windows — Monitor History & Space Presets</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -217,10 +217,11 @@
 <body>
   <div class="header">
     <div class="header-title">
-      <span>🖥 Displays</span>
+      <span>🖥 ScreenStage</span>
       <span class="header-sub" id="headerSub">Monitor History & Presets (Windows)</span>
     </div>
-    <div style="display:flex;gap:6px;">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button class="btn" id="licenseBadgeBtn" onclick="openLicenseModal()">Activate Key</button>
       <button class="btn" onclick="openNewSpaceModal()">+ Space</button>
       <button class="btn" onclick="refreshState()">↻ Refresh</button>
     </div>
@@ -338,6 +339,17 @@
     }
 
     function render() {
+      const licBtn = document.getElementById('licenseBadgeBtn');
+      if (licBtn) {
+        if (state.license) {
+          licBtn.textContent = state.license.t === 'lab' ? `✓ LAB PACK (${state.license.s} SEATS)` : '✓ PRO VERIFIED';
+          licBtn.style.background = 'rgba(16,185,129,0.2)';
+          licBtn.style.color = '#34d399';
+          licBtn.style.borderColor = 'rgba(16,185,129,0.45)';
+        } else {
+          licBtn.textContent = '🔑 Activate Key';
+        }
+      }
       const conn = state.connected || [];
       document.getElementById('connHeader').textContent = `CONNECTED TO THIS PC (${conn.length})`;
       const connEl = document.getElementById('connList');
@@ -624,6 +636,45 @@
       p.command = document.getElementById('pCmd').value.trim() || p.command;
       closeModal();
       saveRoot('Updated preset: ' + p.name);
+    }
+
+    function openLicenseModal() {
+      const m = document.getElementById('modalContent');
+      const lic = state.license;
+      m.innerHTML = `
+        <h3>ScreenStage Offline Ed25519 License</h3>
+        ${lic ? `<div style="padding:10px;border-radius:8px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);margin-bottom:12px;">
+          <div style="color:#34d399;font-weight:700;font-size:12px;">✓ Cryptographic Signature Verified (Ed25519)</div>
+          <div style="color:var(--muted);font-size:11px;margin-top:4px;">Licensed to: ${lic.e} · Tier: ${(lic.t || '').toUpperCase()} (${lic.s} seats)</div>
+        </div>` : ''}
+        <div class="field">
+          <label>Self-Hosted MM1-... Ed25519 License Key</label>
+          <input type="text" id="licKeyInput" placeholder="MM1-..." />
+        </div>
+        <div id="licErr" style="color:#ef4444;font-size:11px;margin-bottom:8px;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:12px;">
+          <button class="btn" onclick="closeModal()">Close</button>
+          <button class="btn btn-primary" onclick="submitLicenseKey()">Verify & Save Key</button>
+        </div>
+      `;
+      document.getElementById('modalBackdrop').style.display = 'flex';
+    }
+
+    async function submitLicenseKey() {
+      const key = document.getElementById('licKeyInput').value.trim();
+      const res = await fetch('/api/license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        document.getElementById('licErr').textContent = data.error || 'Invalid key';
+        return;
+      }
+      closeModal();
+      await refreshState();
+      showToast('Verified Ed25519 License: ' + data.license.e);
     }
 
     refreshState();

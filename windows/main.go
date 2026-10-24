@@ -3,7 +3,9 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -22,6 +24,66 @@ import (
 
 //go:embed ui.html
 var uiFS embed.FS
+
+// --- Self-Hosted Ed25519 Offline License Verifier ---
+
+const musicMindPublicKeyBase64 = "lKfWuwe6m2o92MiIRoKZOf3u41hxthu9mO7m7oRa8vY="
+
+type LicensePayload struct {
+	V   int    `json:"v"`
+	P   string `json:"p"`
+	E   string `json:"e"`
+	T   string `json:"t"`
+	S   int    `json:"s"`
+	Iat int64  `json:"iat"`
+}
+
+func licenseKeyFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	return filepath.Join(home, ".config", "displays", "license.key")
+}
+
+func verifyLicenseKey(rawKey string) *LicensePayload {
+	trimmed := strings.TrimSpace(rawKey)
+	if !strings.HasPrefix(trimmed, "MM1-") {
+		return nil
+	}
+	parts := strings.SplitN(strings.TrimPrefix(trimmed, "MM1-"), ".", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	pubBytes, err := base64.StdEncoding.DecodeString(musicMindPublicKeyBase64)
+	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
+		return nil
+	}
+	sigBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || len(sigBytes) != ed25519.SignatureSize {
+		return nil
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pubBytes), []byte(parts[0]), sigBytes) {
+		return nil
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return nil
+	}
+	var p LicensePayload
+	if json.Unmarshal(payloadBytes, &p) != nil {
+		return nil
+	}
+	return &p
+}
+
+func loadVerifiedWindowsLicense() *LicensePayload {
+	data, err := os.ReadFile(licenseKeyFilePath())
+	if err != nil {
+		return nil
+	}
+	return verifyLicenseKey(string(data))
+}
 
 // --- Schema v3 (100% compatible with macOS Displays.app ~/.config/displays/presets.json) ---
 
@@ -582,7 +644,24 @@ func main() {
 			"platform":  runtime.GOOS,
 			"root":      store.Root,
 			"connected": store.Connected,
+			"license":   loadVerifiedWindowsLicense(),
 		})
+	})
+
+	mux.HandleFunc("/api/license", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Key string `json:"key"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		payload := verifyLicenseKey(req.Key)
+		if payload == nil {
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "Invalid Ed25519 signature or malformed MM1- key"})
+			return
+		}
+		_ = os.MkdirAll(filepath.Dir(licenseKeyFilePath()), 0755)
+		_ = os.WriteFile(licenseKeyFilePath(), []byte(strings.TrimSpace(req.Key)), 0644)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "license": payload})
 	})
 
 	mux.HandleFunc("/api/apply", func(w http.ResponseWriter, r *http.Request) {
