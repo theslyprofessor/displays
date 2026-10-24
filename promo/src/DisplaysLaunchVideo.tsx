@@ -12,6 +12,7 @@ import {
 import { TransitionSeries, springTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { slide } from "@remotion/transitions/slide";
+import { BRAND } from "./brandConfig";
 
 const FONT_FAMILY =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif";
@@ -400,9 +401,9 @@ const Scene2NativeUI: React.FC = () => {
               WebkitTextFillColor: "transparent",
             }}
           >
-            Displays
+            {BRAND.productName}
           </span>{" "}
-          for macOS.
+          for macOS &amp; PC.
         </h2>
 
         <p
@@ -892,7 +893,7 @@ const Scene4CTA: React.FC = () => {
             lineHeight: 1.02,
           }}
         >
-          Displays for macOS
+          {BRAND.productName} for macOS &amp; Windows
         </h1>
 
         <p
@@ -903,8 +904,7 @@ const Scene4CTA: React.FC = () => {
             maxWidth: 960,
           }}
         >
-          Monitor History • Hardware UUID Room Detection • Self-Explanatory
-          Presets
+          {BRAND.tagline} • Hardware UUID Room Detection • KVM Support
         </p>
 
         {/* Pricing / Edition Cards */}
@@ -991,14 +991,14 @@ const Scene4CTA: React.FC = () => {
                 color: "#ffffff",
               }}
             >
-              $19{" "}
+              {BRAND.priceIndividual}{" "}
               <span style={{ fontSize: 20, fontWeight: 500, color: "#cbd5e1" }}>
-                one-time license
+                one-time Ed25519 license
               </span>
             </div>
             <div style={{ fontSize: 17, color: "#e2e8f0", lineHeight: 1.5 }}>
-              Developer-signed native macOS app, persistent Login Item & TCC
-              permissions, CLI tool, and lifetime updates.
+              Developer-signed macOS + Windows 10/11 bundle, offline Ed25519
+              license key, CLI tool, and lifetime updates.
             </div>
           </div>
         </div>
@@ -1016,7 +1016,7 @@ const Scene4CTA: React.FC = () => {
             boxShadow: "0 20px 50px rgba(16, 185, 129, 0.35)",
           }}
         >
-          buildforwardtech.com/displays
+          {BRAND.url}
         </div>
       </div>
     </AbsoluteFill>

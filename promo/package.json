@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "render": "remotion render src/index.ts DisplaysLaunch out/displays-launch.mp4 --codec=h264 --crf=18"
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts DisplaysLaunch out/displays-launch.mp4 --codec=h264 --crf=18",
+    "render:reel": "remotion render src/index.ts DisplaysVerticalReel out/displays-reel-9x16.mp4 --codec=h264 --crf=18",
+    "render:all": "bun run render && bun run render:reel"
   },
   "dependencies": {
     "@remotion/cli": "4.0.270",
