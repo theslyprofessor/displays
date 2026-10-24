@@ -186,7 +186,8 @@ final class DisplayStore: ObservableObject {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? enc.encode(r) {
-            try? data.write(to: configFile, options: .atomic)
+            let targetURL = configFile.resolvingSymlinksInPath()
+            try? data.write(to: targetURL, options: .atomic)
         }
     }
 
@@ -407,60 +408,104 @@ final class DisplayStore: ObservableObject {
     // MARK: - Build & Execute displayplacer Commands
 
     func resolveCommand(_ raw: String) -> String {
-        guard raw.hasPrefix("@dynamic:") else { return raw }
-        let mode = raw.replacingOccurrences(of: "@dynamic:", with: "")
         let active = connected
         guard !active.isEmpty else { return "" }
 
         let builtIn = active.first(where: { $0.isBuiltIn })
         let externals = active.filter { !$0.isBuiltIn }
 
-        switch mode {
-        case "mirror_all":
-            let ordered = (externals + (builtIn.map { [$0] } ?? [])).map(\.id)
-            let joined = ordered.joined(separator: "+")
-            return #"displayplacer "id:\#(joined) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#
+        if raw.hasPrefix("@dynamic:") {
+            let mode = raw.replacingOccurrences(of: "@dynamic:", with: "")
+            switch mode {
+            case "mirror_all":
+                let ordered = (externals + (builtIn.map { [$0] } ?? [])).map(\.id)
+                let joined = ordered.joined(separator: "+")
+                return #"displayplacer "id:\#(joined) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#
 
-        case "extend_all":
-            var parts: [String] = []
-            var x = 0
-            let ordered = (builtIn.map { [$0] } ?? []) + externals
-            for d in ordered {
-                let res = d.isBuiltIn ? "1728x1117" : "1920x1080"
-                let width = d.isBuiltIn ? 1728 : 1920
-                let scale = d.isBuiltIn ? "on" : "off"
-                parts.append(#""id:\#(d.id) res:\#(res) enabled:true scaling:\#(scale) origin:(\#(x),0) degree:0""#)
-                x += width
-            }
-            return "displayplacer " + parts.joined(separator: " ")
+            case "extend_all":
+                var parts: [String] = []
+                var x = 0
+                let ordered = (builtIn.map { [$0] } ?? []) + externals
+                for d in ordered {
+                    let res = d.isBuiltIn ? "1728x1117" : "1920x1080"
+                    let width = d.isBuiltIn ? 1728 : 1920
+                    let scale = d.isBuiltIn ? "on" : "off"
+                    parts.append(#""id:\#(d.id) res:\#(res) enabled:true scaling:\#(scale) origin:(\#(x),0) degree:0""#)
+                    x += width
+                }
+                return "displayplacer " + parts.joined(separator: " ")
 
-        case "broadcast_main_extend_builtin":
-            var parts: [String] = []
-            if !externals.isEmpty {
-                let extIDs = externals.map(\.id).joined(separator: "+")
-                parts.append(#""id:\#(extIDs) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
-            }
-            if let mbp = builtIn {
-                let x = externals.isEmpty ? 0 : 1920
-                parts.append(#""id:\#(mbp.id) res:1728x1117 enabled:true scaling:on origin:(\#(x),0) degree:0""#)
-            }
-            return "displayplacer " + parts.joined(separator: " ")
+            case "broadcast_main_extend_builtin":
+                var parts: [String] = []
+                if !externals.isEmpty {
+                    let extIDs = externals.map(\.id).joined(separator: "+")
+                    parts.append(#""id:\#(extIDs) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
+                }
+                if let mbp = builtIn {
+                    let x = externals.isEmpty ? 0 : 1920
+                    parts.append(#""id:\#(mbp.id) res:1728x1117 enabled:true scaling:on origin:(\#(x),0) degree:0""#)
+                }
+                return "displayplacer " + parts.joined(separator: " ")
 
-        case "laptop_only":
-            var parts: [String] = []
-            if let mbp = builtIn {
-                parts.append(#""id:\#(mbp.id) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0""#)
-            } else if let firstExt = externals.first {
-                parts.append(#""id:\#(firstExt.id) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
-            }
-            for ext in (builtIn != nil ? externals : Array(externals.dropFirst())) {
-                parts.append(#""id:\#(ext.id) enabled:false""#)
-            }
-            return "displayplacer " + parts.joined(separator: " ")
+            case "laptop_only":
+                var parts: [String] = []
+                if let mbp = builtIn {
+                    parts.append(#""id:\#(mbp.id) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0""#)
+                } else if let firstExt = externals.first {
+                    parts.append(#""id:\#(firstExt.id) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
+                }
+                for ext in (builtIn != nil ? externals : Array(externals.dropFirst())) {
+                    parts.append(#""id:\#(ext.id) enabled:false""#)
+                }
+                return "displayplacer " + parts.joined(separator: " ")
 
-        default:
-            return raw
+            default:
+                return raw
+            }
         }
+
+        // Map symbolic placeholder IDs (e.g. POWAY-DESK-MONITOR, POWAY-KVM-TV) to connected external displays
+        // and strip any unplugged UUIDs so multi-monitor presets still apply cleanly when a secondary screen is unplugged.
+        let connectedIDs = Set(active.map(\.id))
+        var availableExternals = externals.map(\.id).filter { !raw.contains($0) }
+        var placeholderMap: [String: String] = [:]
+
+        let pattern = #""([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return raw }
+        let nsRange = NSRange(raw.startIndex..<raw.endIndex, in: raw)
+        let matches = regex.matches(in: raw, range: nsRange)
+        if matches.isEmpty { return raw }
+
+        var resolvedSegments: [String] = []
+        for m in matches {
+            guard let r = Range(m.range(at: 1), in: raw) else { continue }
+            let seg = String(raw[r])
+            var tokens = seg.split(separator: " ").map(String.init)
+            guard let idIdx = tokens.firstIndex(where: { $0.hasPrefix("id:") }) else { continue }
+            let rawIDList = tokens[idIdx].replacingOccurrences(of: "id:", with: "").split(separator: "+").map(String.init)
+
+            var liveIDs: [String] = []
+            for id in rawIDList {
+                if connectedIDs.contains(id) {
+                    liveIDs.append(id)
+                } else if let mapped = placeholderMap[id] {
+                    liveIDs.append(mapped)
+                } else if id.hasPrefix("POWAY-") || id.hasPrefix("84-105-") {
+                    if !availableExternals.isEmpty {
+                        let nextExt = availableExternals.removeFirst()
+                        placeholderMap[id] = nextExt
+                        liveIDs.append(nextExt)
+                    }
+                }
+            }
+
+            guard !liveIDs.isEmpty else { continue }
+            tokens[idIdx] = "id:" + liveIDs.joined(separator: "+")
+            resolvedSegments.append("\"" + tokens.joined(separator: " ") + "\"")
+        }
+
+        guard !resolvedSegments.isEmpty else { return raw }
+        return "displayplacer " + resolvedSegments.joined(separator: " ")
     }
 
     func buildRoleDraftCommand() -> String {
@@ -1137,7 +1182,8 @@ struct PresetRowView: View {
     @State private var showingEditPreset = false
 
     var isActive: Bool {
-        if !store.currentCommand.isEmpty && store.currentCommand == preset.command {
+        let resolved = store.resolveCommand(preset.command)
+        if !store.currentCommand.isEmpty && (store.currentCommand == preset.command || store.currentCommand == resolved) {
             return true
         }
         guard store.root.lastAppliedPresetID == preset.id else { return false }
@@ -1835,7 +1881,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func updateStatusButtonTitle() {
         guard let button = statusItem?.button else { return }
         if let detected = DisplayStore.shared.detectedFolderID {
-            let short = detected.replacingOccurrences(of: "84-", with: "")
+            let short: String
+            switch detected {
+            case "cv-home": short = "CV"
+            case "poway-home": short = "PWY"
+            default: short = detected.replacingOccurrences(of: "84-", with: "")
+            }
             button.title = " \(short)"
         } else {
             button.title = " Disp"
