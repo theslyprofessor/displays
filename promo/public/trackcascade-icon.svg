@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="tcBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#0b1329"/>
+    </linearGradient>
+    <linearGradient id="tcCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="tcAmber" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="tcEmerald" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="tcPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded macOS/Studio App Squircle -->
+  <rect x="48" y="48" width="928" height="928" rx="210" fill="url(#tcBg)" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="8"/>
+
+  <!-- Subtle Grid Lines -->
+  <line x1="220" y1="160" x2="220" y2="864" stroke="#1e293b" stroke-width="4" stroke-dasharray="10 10"/>
+  <line x1="512" y1="160" x2="512" y2="864" stroke="#1e293b" stroke-width="4" stroke-dasharray="10 10"/>
+  <line x1="804" y1="160" x2="804" y2="864" stroke="#1e293b" stroke-width="4" stroke-dasharray="10 10"/>
+
+  <!-- Track 1 (Stereo 1/2) -->
+  <rect x="132" y="210" width="260" height="104" rx="24" fill="url(#tcCyan)"/>
+  <circle cx="188" cy="262" r="18" fill="#090d16"/>
+  <circle cx="232" cy="262" r="18" fill="#090d16"/>
+  <path d="M392 262 H636" stroke="#38bdf8" stroke-width="14" stroke-linecap="round"/>
+  <rect x="636" y="222" width="246" height="80" rx="18" fill="#0f172a" stroke="#38bdf8" stroke-width="6"/>
+  <text x="759" y="274" font-family="Inter, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#38bdf8" text-anchor="middle">OUT 1/2</text>
+
+  <!-- Track 2 (Mono 3) -->
+  <rect x="182" y="366" width="260" height="104" rx="24" fill="url(#tcEmerald)"/>
+  <circle cx="238" cy="418" r="18" fill="#090d16"/>
+  <path d="M442 418 H636" stroke="#34d399" stroke-width="14" stroke-linecap="round"/>
+  <rect x="636" y="378" width="246" height="80" rx="18" fill="#0f172a" stroke="#34d399" stroke-width="6"/>
+  <text x="759" y="430" font-family="Inter, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#34d399" text-anchor="middle">OUT 3</text>
+
+  <!-- Track 3 (Mono 4) -->
+  <rect x="232" y="522" width="260" height="104" rx="24" fill="url(#tcAmber)"/>
+  <circle cx="288" cy="574" r="18" fill="#090d16"/>
+  <path d="M492 574 H636" stroke="#fbbf24" stroke-width="14" stroke-linecap="round"/>
+  <rect x="636" y="534" width="246" height="80" rx="18" fill="#0f172a" stroke="#fbbf24" stroke-width="6"/>
+  <text x="759" y="586" font-family="Inter, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#fbbf24" text-anchor="middle">OUT 4</text>
+
+  <!-- Track 4 (Stereo 5/6) -->
+  <rect x="282" y="678" width="260" height="104" rx="24" fill="url(#tcPurple)"/>
+  <circle cx="338" cy="730" r="18" fill="#090d16"/>
+  <circle cx="382" cy="730" r="18" fill="#090d16"/>
+  <path d="M542 730 H636" stroke="#c084fc" stroke-width="14" stroke-linecap="round"/>
+  <rect x="636" y="690" width="246" height="80" rx="18" fill="#0f172a" stroke="#c084fc" stroke-width="6"/>
+  <text x="759" y="742" font-family="Inter, -apple-system, sans-serif" font-size="38" font-weight="800" fill="#c084fc" text-anchor="middle">OUT 5/6</text>
+</svg>

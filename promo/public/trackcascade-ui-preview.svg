@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="1100" height="680">
+  <defs>
+    <linearGradient id="tcWin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Window -->
+  <rect x="0" y="0" width="1100" height="680" rx="22" fill="url(#tcWin)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Top Bar -->
+  <rect x="0" y="0" width="1100" height="58" rx="22" fill="#0f172a"/>
+  <circle cx="28" cy="29" r="7" fill="#ef4444"/>
+  <circle cx="50" cy="29" r="7" fill="#f59e0b"/>
+  <circle cx="72" cy="29" r="7" fill="#10b981"/>
+  <text x="102" y="35" font-family="Inter, -apple-system, sans-serif" font-size="17" font-weight="800" fill="#f8fafc">TrackCascade v1.0 (abletools) — Batch Track Builder &amp; Cascading I/O Router</text>
+  <rect x="840" y="14" width="236" height="30" rx="15" fill="#f59e0b" fill-opacity="0.18" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="958" y="34" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#fbbf24" text-anchor="middle">LIVE 11 &amp; 12 SUITE READY</text>
+
+  <!-- Left Column: New Tracks Modal (Extensions SDK) -->
+  <rect x="24" y="78" width="510" height="576" rx="16" fill="#1e1e22" stroke="#3f3f46" stroke-width="1.5"/>
+  <text x="48" y="114" font-family="Inter, sans-serif" font-size="18" font-weight="900" fill="#fb923c">1. Batch New Tracks Dialog (.ablx)</text>
+  <text x="48" y="138" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#a1a1aa">Create N Audio/MIDI tracks with custom names &amp; record-arm in one undo step.</text>
+
+  <!-- Table Header -->
+  <g font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#71717a">
+    <text x="48" y="176">COUNT</text>
+    <text x="124" y="176">TYPE</text>
+    <text x="236" y="176">TRACK NAME PREFIX</text>
+    <text x="454" y="176">ARM</text>
+  </g>
+
+  <!-- Row 1 -->
+  <rect x="44" y="190" width="64" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="76" y="218" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#f8fafc" text-anchor="middle">2</text>
+  <rect x="118" y="190" width="104" height="44" rx="8" fill="#111113" stroke="#38bdf8"/>
+  <text x="170" y="218" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="middle">Stereo Bus</text>
+  <rect x="232" y="190" width="206" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="248" y="218" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700" fill="#f8fafc">Drum OH / Room</text>
+  <rect x="452" y="198" width="28" height="28" rx="6" fill="#fb923c"/>
+  <text x="466" y="218" font-family="Inter, sans-serif" font-size="16" font-weight="900" fill="#090d16" text-anchor="middle">✓</text>
+
+  <!-- Row 2 -->
+  <rect x="44" y="248" width="64" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="76" y="276" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#f8fafc" text-anchor="middle">8</text>
+  <rect x="118" y="248" width="104" height="44" rx="8" fill="#111113" stroke="#34d399"/>
+  <text x="170" y="276" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#34d399" text-anchor="middle">Mono Mic</text>
+  <rect x="232" y="248" width="206" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="248" y="276" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700" fill="#f8fafc">Close Mic</text>
+  <rect x="452" y="256" width="28" height="28" rx="6" fill="#fb923c"/>
+  <text x="466" y="276" font-family="Inter, sans-serif" font-size="16" font-weight="900" fill="#090d16" text-anchor="middle">✓</text>
+
+  <!-- Row 3 -->
+  <rect x="44" y="306" width="64" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="76" y="334" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#f8fafc" text-anchor="middle">4</text>
+  <rect x="118" y="306" width="104" height="44" rx="8" fill="#111113" stroke="#c084fc"/>
+  <text x="170" y="334" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#c084fc" text-anchor="middle">MIDI Synth</text>
+  <rect x="232" y="306" width="206" height="44" rx="8" fill="#111113" stroke="#3f3f46"/>
+  <text x="248" y="334" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700" fill="#f8fafc">Hardware Synth</text>
+  <rect x="452" y="314" width="28" height="28" rx="6" fill="#27272a" stroke="#52525b"/>
+
+  <!-- Preset Pills -->
+  <text x="48" y="394" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#a1a1aa">QUICK TRACKING PRESETS</text>
+  <rect x="44" y="408" width="144" height="36" rx="8" fill="#27272a" stroke="#fb923c"/>
+  <text x="116" y="431" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#fb923c" text-anchor="middle">16-Ch Drum Tracking</text>
+  <rect x="198" y="408" width="144" height="36" rx="8" fill="#27272a" stroke="#3f3f46"/>
+  <text x="270" y="431" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#e4e4e7" text-anchor="middle">SSL 24-Bus Stems</text>
+  <rect x="352" y="408" width="156" height="36" rx="8" fill="#27272a" stroke="#3f3f46"/>
+  <text x="430" y="431" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#e4e4e7" text-anchor="middle">8 Stereo Print Pairs</text>
+
+  <!-- Create Action Bar -->
+  <rect x="44" y="576" width="466" height="54" rx="12" fill="#fb923c"/>
+  <text x="277" y="610" font-family="Inter, sans-serif" font-size="17" font-weight="900" fill="#090d16" text-anchor="middle">Create 14 Tracks &amp; Cascade Hardware I/O (⌘↵)</text>
+
+  <!-- Right Column: Cascading I/O Allocation Matrix -->
+  <rect x="556" y="78" width="520" height="576" rx="16" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="580" y="114" font-family="Inter, sans-serif" font-size="18" font-weight="900" fill="#38bdf8">2. Pair-Aware Cascading I/O (.amxd + CLI)</text>
+  <text x="580" y="138" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#94a3b8">Automatically advances stereo pairs (1/2, 5/6) and mono channels (3, 4).</text>
+
+  <!-- Cascade Cards -->
+  <!-- Card 1 -->
+  <rect x="580" y="168" width="472" height="72" rx="12" fill="#090d16" stroke="#38bdf8" stroke-width="1.5"/>
+  <rect x="596" y="186" width="82" height="36" rx="8" fill="#38bdf8" fill-opacity="0.18"/>
+  <text x="637" y="209" font-family="JetBrains Mono, monospace" font-size="13" font-weight="800" fill="#38bdf8" text-anchor="middle">STEREO</text>
+  <text x="694" y="210" font-family="Inter, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">Track 1 · Drum OH</text>
+  <text x="955" y="210" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#38bdf8" text-anchor="middle">→ EXT OUT 1/2</text>
+
+  <!-- Card 2 -->
+  <rect x="580" y="254" width="472" height="72" rx="12" fill="#090d16" stroke="#34d399" stroke-width="1.5"/>
+  <rect x="596" y="272" width="82" height="36" rx="8" fill="#34d399" fill-opacity="0.18"/>
+  <text x="637" y="295" font-family="JetBrains Mono, monospace" font-size="13" font-weight="800" fill="#34d399" text-anchor="middle">MONO</text>
+  <text x="694" y="296" font-family="Inter, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">Track 2 · Kick In</text>
+  <text x="955" y="296" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#34d399" text-anchor="middle">→ EXT OUT 3</text>
+
+  <!-- Card 3 -->
+  <rect x="580" y="340" width="472" height="72" rx="12" fill="#090d16" stroke="#fbbf24" stroke-width="1.5"/>
+  <rect x="596" y="358" width="82" height="36" rx="8" fill="#fbbf24" fill-opacity="0.18"/>
+  <text x="637" y="381" font-family="JetBrains Mono, monospace" font-size="13" font-weight="800" fill="#fbbf24" text-anchor="middle">MONO</text>
+  <text x="694" y="382" font-family="Inter, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">Track 3 · Snare Top</text>
+  <text x="955" y="382" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#fbbf24" text-anchor="middle">→ EXT OUT 4</text>
+
+  <!-- Card 4 -->
+  <rect x="580" y="426" width="472" height="72" rx="12" fill="#090d16" stroke="#c084fc" stroke-width="1.5"/>
+  <rect x="596" y="444" width="82" height="36" rx="8" fill="#c084fc" fill-opacity="0.18"/>
+  <text x="637" y="467" font-family="JetBrains Mono, monospace" font-size="13" font-weight="800" fill="#c084fc" text-anchor="middle">STEREO</text>
+  <text x="694" y="468" font-family="Inter, sans-serif" font-size="16" font-weight="800" fill="#f8fafc">Track 4 · Room Pair</text>
+  <text x="955" y="468" font-family="JetBrains Mono, monospace" font-size="16" font-weight="800" fill="#c084fc" text-anchor="middle">→ EXT OUT 5/6</text>
+
+  <!-- Bottom CLI Badge -->
+  <rect x="580" y="520" width="472" height="110" rx="12" fill="#090d16" stroke="#1e293b"/>
+  <text x="600" y="550" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#64748b">TERMINAL &amp; CONTROL SURFACE AUTOMATION</text>
+  <text x="600" y="582" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700" fill="#34d399">$ trackcascade --preset drum-bus-pairs --apply</text>
+  <text x="600" y="610" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#94a3b8">Works in Ableton Live 11 &amp; 12 on macOS and Windows.</text>
+</svg>

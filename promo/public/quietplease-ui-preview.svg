@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="1100" height="680">
+  <defs>
+    <linearGradient id="qpWin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="qpRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ef4444" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="qpCyan" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.02"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window Frame -->
+  <rect x="0" y="0" width="1100" height="680" rx="22" fill="url(#qpWin)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Top Bar -->
+  <rect x="0" y="0" width="1100" height="58" rx="22" fill="#0f172a"/>
+  <circle cx="28" cy="29" r="7" fill="#ef4444"/>
+  <circle cx="50" cy="29" r="7" fill="#f59e0b"/>
+  <circle cx="72" cy="29" r="7" fill="#10b981"/>
+  <text x="102" y="35" font-family="Inter, -apple-system, sans-serif" font-size="17" font-weight="800" fill="#f8fafc">QuietPlease v0.3 — Classroom &amp; Studio Compressor Detector</text>
+
+  <!-- Live Status Pill -->
+  <rect x="820" y="14" width="256" height="30" rx="15" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-width="1.5"/>
+  <circle cx="838" cy="29" r="5" fill="#10b981"/>
+  <text x="852" y="34" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#34d399">LISTENING · 74.2 dB SPL</text>
+
+  <!-- 2x2 Scope Grid -->
+  <!-- Panel 1: Level Over Time (15s History) -->
+  <rect x="24" y="76" width="516" height="236" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="42" y="104" font-family="Inter, sans-serif" font-size="14" font-weight="800" fill="#e2e8f0">LEVEL OVER TIME (15s ROOM HISTORY)</text>
+  <text x="420" y="104" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#f87171">THRESH 70.0 dB</text>
+  <!-- Threshold Line -->
+  <line x1="42" y1="168" x2="520" y2="168" stroke="#f87171" stroke-width="2" stroke-dasharray="6 4"/>
+  <!-- Signal Waveform Crossing Threshold -->
+  <path d="M42 260 L95 248 L145 232 L195 240 L245 190 L285 132 L330 118 L375 142 L415 215 L465 235 L520 228 L520 288 L42 288 Z" fill="url(#qpCyan)"/>
+  <path d="M262 168 L285 132 L330 118 L375 142 L393 168 Z" fill="url(#qpRed)"/>
+  <path d="M42 260 L95 248 L145 232 L195 240 L245 190 L285 132 L330 118 L375 142 L415 215 L465 235 L520 228" fill="none" stroke="#38bdf8" stroke-width="3"/>
+  <!-- Triggered Banner Strip -->
+  <rect x="262" y="284" width="131" height="14" rx="4" fill="#ef4444"/>
+  <text x="327" y="295" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">SIGN ON WALL</text>
+
+  <!-- Panel 2: Compressor Transfer Curve -->
+  <rect x="560" y="76" width="516" height="236" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="578" y="104" font-family="Inter, sans-serif" font-size="14" font-weight="800" fill="#e2e8f0">TRANSFER CURVE (INPUT vs OUTPUT dB)</text>
+  <text x="935" y="104" font-family="JetBrains Mono, monospace" font-size="13" font-weight="700" fill="#38bdf8">RATIO 4.0 : 1</text>
+  <!-- 1:1 Reference Dashed Line -->
+  <line x1="600" y1="286" x2="980" y2="120" stroke="#334155" stroke-width="2" stroke-dasharray="5 5"/>
+  <!-- Knee + Ratio Bend -->
+  <path d="M600 286 L810 194 Q835 183 865 178 L1030 154" fill="none" stroke="#34d399" stroke-width="4"/>
+  <circle cx="835" cy="184" r="7" fill="#fbbf24" stroke="#090d16" stroke-width="2"/>
+  <text x="850" y="212" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#fbbf24">Knee 6 dB · -4.2 dB GR</text>
+
+  <!-- Panel 3: Step-Response Envelope (Peak vs RMS) -->
+  <rect x="24" y="328" width="516" height="210" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="42" y="356" font-family="Inter, sans-serif" font-size="14" font-weight="800" fill="#e2e8f0">ENVELOPE STEP RESPONSE (PEAK vs RMS)</text>
+  <text x="395" y="356" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#c084fc">ATK 25ms · REL 350ms</text>
+  <!-- Peak curve -->
+  <path d="M42 505 L110 505 L125 390 L320 390 L385 505 L520 505" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="4 3"/>
+  <!-- RMS smoothed curve -->
+  <path d="M42 505 L110 505 Q145 398 205 398 L320 398 Q380 500 455 505 L520 505" fill="none" stroke="#c084fc" stroke-width="3.5"/>
+  <text x="215" y="425" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#c084fc">RMS Window 150ms · Hold 1.2s</text>
+
+  <!-- Panel 4: Real-Time 32-Band Spectrum + Sidechain Filter -->
+  <rect x="560" y="328" width="516" height="210" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="578" y="356" font-family="Inter, sans-serif" font-size="14" font-weight="800" fill="#e2e8f0">32-BAND SPECTRUM &amp; SIDECHAIN VOICE FILTER</text>
+  <text x="915" y="356" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="#fbbf24">300 Hz – 3.4 kHz</text>
+  <!-- Shaded Voice Passband -->
+  <rect x="690" y="372" width="230" height="145" fill="#fbbf24" fill-opacity="0.1" stroke="#fbbf24" stroke-opacity="0.4" stroke-width="1.5"/>
+  <!-- Spectrum Bars -->
+  <g fill="#38bdf8" opacity="0.85">
+    <rect x="590" y="470" width="14" height="47" rx="3"/>
+    <rect x="612" y="460" width="14" height="57" rx="3"/>
+    <rect x="634" y="452" width="14" height="65" rx="3"/>
+    <rect x="656" y="445" width="14" height="72" rx="3"/>
+    <rect x="678" y="430" width="14" height="87" rx="3"/>
+    <rect x="700" y="402" width="14" height="115" rx="3" fill="#fbbf24"/>
+    <rect x="722" y="388" width="14" height="129" rx="3" fill="#fbbf24"/>
+    <rect x="744" y="395" width="14" height="122" rx="3" fill="#fbbf24"/>
+    <rect x="766" y="384" width="14" height="133" rx="3" fill="#f87171"/>
+    <rect x="788" y="392" width="14" height="125" rx="3" fill="#fbbf24"/>
+    <rect x="810" y="406" width="14" height="111" rx="3" fill="#fbbf24"/>
+    <rect x="832" y="415" width="14" height="102" rx="3" fill="#fbbf24"/>
+    <rect x="854" y="422" width="14" height="95" rx="3" fill="#fbbf24"/>
+    <rect x="876" y="432" width="14" height="85" rx="3" fill="#fbbf24"/>
+    <rect x="898" y="440" width="14" height="77" rx="3" fill="#fbbf24"/>
+    <rect x="920" y="458" width="14" height="59" rx="3"/>
+    <rect x="942" y="472" width="14" height="45" rx="3"/>
+    <rect x="964" y="482" width="14" height="35" rx="3"/>
+    <rect x="986" y="490" width="14" height="27" rx="3"/>
+    <rect x="1008" y="496" width="14" height="21" rx="3"/>
+  </g>
+
+  <!-- Bottom Compressor Controls Strip -->
+  <rect x="24" y="554" width="1052" height="102" rx="14" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <g font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="#94a3b8">
+    <text x="52" y="584">THRESHOLD</text>
+    <text x="52" y="616" font-family="JetBrains Mono, monospace" font-size="22" fill="#f8fafc">70.0 dB SPL</text>
+
+    <text x="225" y="584">RATIO</text>
+    <text x="225" y="616" font-family="JetBrains Mono, monospace" font-size="22" fill="#38bdf8">4.0 : 1</text>
+
+    <text x="365" y="584">ATTACK / RELEASE</text>
+    <text x="365" y="616" font-family="JetBrains Mono, monospace" font-size="22" fill="#c084fc">25 ms / 350 ms</text>
+
+    <text x="580" y="584">DETECTOR</text>
+    <text x="580" y="616" font-family="JetBrains Mono, monospace" font-size="22" fill="#34d399">RMS + Voice Band</text>
+  </g>
+
+  <!-- Wall Sign Preview Button -->
+  <rect x="820" y="576" width="232" height="58" rx="12" fill="#ef4444" fill-opacity="0.2" stroke="#ef4444" stroke-width="2"/>
+  <text x="936" y="602" font-family="Inter, sans-serif" font-size="15" font-weight="900" fill="#fca5a5" text-anchor="middle">QUIET PLEASE...</text>
+  <text x="936" y="622" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="#f87171" text-anchor="middle">WALL SIGN ACTIVE (+4.2 dB)</text>
+</svg>
