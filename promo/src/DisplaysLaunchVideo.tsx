@@ -13,6 +13,14 @@ import { TransitionSeries, springTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { slide } from "@remotion/transitions/slide";
 import { BRAND } from "./brandConfig";
+import {
+  KineticWords,
+  LaptopSvg,
+  MonitorSvg,
+  PlatformBadgesRow,
+  ScreenStageLogo,
+  TvSvg,
+} from "./KineticPrimitives";
 
 const FONT_FAMILY =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif";
@@ -22,8 +30,8 @@ const CyberBackground: React.FC<{ accent?: string }> = ({
   accent = "#38bdf8",
 }) => {
   const frame = useCurrentFrame();
-  const shift = (frame * 1.2) % 80;
-  const pulse = Math.sin(frame / 18) * 0.12 + 0.88;
+  const shift = (frame * 1.1) % 80;
+  const pulse = Math.sin(frame / 22) * 0.12 + 0.88;
 
   return (
     <AbsoluteFill
@@ -33,16 +41,15 @@ const CyberBackground: React.FC<{ accent?: string }> = ({
         overflow: "hidden",
       }}
     >
-      {/* Glowing ambient orbs */}
       <div
         style={{
           position: "absolute",
-          width: 960,
-          height: 960,
+          width: 980,
+          height: 980,
           borderRadius: "50%",
           background: `radial-gradient(circle, ${accent}33 0%, transparent 68%)`,
           top: -280,
-          left: 480 + Math.sin(frame / 35) * 90,
+          left: 480 + Math.sin(frame / 38) * 90,
           transform: `scale(${pulse})`,
           filter: "blur(50px)",
         }}
@@ -50,17 +57,16 @@ const CyberBackground: React.FC<{ accent?: string }> = ({
       <div
         style={{
           position: "absolute",
-          width: 760,
-          height: 760,
+          width: 780,
+          height: 780,
           borderRadius: "50%",
           background:
-            "radial-gradient(circle, rgba(168, 85, 247, 0.20) 0%, transparent 70%)",
+            "radial-gradient(circle, rgba(168, 85, 247, 0.22) 0%, transparent 70%)",
           bottom: -260,
-          right: 180 + Math.cos(frame / 30) * 70,
+          right: 180 + Math.cos(frame / 32) * 70,
           filter: "blur(60px)",
         }}
       />
-      {/* Perspective floor grid */}
       <div
         style={{
           position: "absolute",
@@ -82,151 +88,171 @@ const CyberBackground: React.FC<{ accent?: string }> = ({
   );
 };
 
-// Scene 1: The Multi-Monitor Chaos Hook (0 - 4.2s = 252 frames)
+// Scene 1: The Multi-Monitor Chaos Hook -> Snap into Clean Roles (410 frames = 6.83s)
 const Scene1Hook: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const titleSpring = spring({ frame, fps, config: { damping: 14, mass: 0.8 } });
+  const SNAP_FRAME = 185;
+
+  const titleSpring = spring({
+    frame,
+    fps,
+    config: { damping: 14, mass: 0.8 },
+  });
   const subSpring = spring({
-    frame: frame - 18,
+    frame: Math.max(0, frame - 20),
     fps,
     config: { damping: 16, mass: 0.9 },
   });
 
   const monitors = [
     {
-      label: "Studio A · C27-30 (2)",
-      sub: "27\" HDMI · 1920x1080 @ 75Hz",
+      label: 'Primary 27" 4K Desk',
+      sub: "Thunderbolt / DisplayPort · 60Hz",
       badge: "WRONG ORIGIN (-1920,0)",
       color: "#ef4444",
-      x: -440,
-      y: 90,
+      x: -510,
+      y: 80,
       rot: -8,
-      delay: 12,
+      delay: 16,
+      icon: (c: string) => <MonitorSvg size={38} color={c} />,
     },
     {
-      label: "Control Room TV (Blackmagic)",
+      label: "Control Room TV (KVM)",
       sub: "HDMI Broadcast · 1080p @ 60Hz",
       badge: "UNMIRRORED DESKTOP",
       color: "#f59e0b",
       x: 0,
-      y: 55,
-      rot: 2,
-      delay: 22,
+      y: 45,
+      rot: 3,
+      delay: 28,
+      icon: (c: string) => <TvSvg size={38} color={c} />,
     },
     {
-      label: "MacBook Pro (In Machine Room)",
-      sub: "Closed Clamshell · Can't See Screen",
+      label: "Laptop Display",
+      sub: "Closed in Dock · Can't See Screen",
       badge: "STOLE MAIN MENU BAR",
       color: "#ec4899",
-      x: 440,
-      y: 95,
+      x: 510,
+      y: 85,
       rot: 7,
-      delay: 32,
+      delay: 40,
+      icon: (c: string) => <LaptopSvg size={38} color={c} />,
     },
   ];
 
-  // At frame 135, snap all 3 monitors into clean alignment!
   const snapProgress = spring({
-    frame: frame - 130,
+    frame: Math.max(0, frame - SNAP_FRAME),
     fps,
-    config: { damping: 13, stiffness: 140 },
+    config: { damping: 13, stiffness: 145 },
   });
 
   return (
     <AbsoluteFill style={{ fontFamily: FONT_FAMILY, color: "white" }}>
-      <CyberBackground accent={frame < 130 ? "#f43f5e" : "#38bdf8"} />
+      <CyberBackground accent={frame < SNAP_FRAME ? "#f43f5e" : "#38bdf8"} />
 
       <div
         style={{
           position: "absolute",
-          top: 96,
+          top: 64,
           width: "100%",
           textAlign: "center",
+          padding: "0 80px",
         }}
       >
         <div
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 10,
-            padding: "8px 20px",
+            gap: 16,
+            padding: "10px 26px",
             borderRadius: 999,
-            background: "rgba(15, 23, 42, 0.78)",
-            border: "1px solid rgba(56, 189, 248, 0.35)",
-            fontSize: 18,
-            fontWeight: 600,
-            letterSpacing: 1.5,
+            background: "rgba(15, 23, 42, 0.88)",
+            border: "2px solid rgba(56, 189, 248, 0.45)",
+            fontSize: 22,
+            fontWeight: 800,
+            letterSpacing: 1.4,
             color: "#38bdf8",
             textTransform: "uppercase",
             transform: `scale(${titleSpring})`,
+            marginBottom: 22,
           }}
         >
-          <span>BUILD FORWARD TECH LABS</span>
-          <span style={{ opacity: 0.4 }}>•</span>
-          <span>NATIVE MACOS UTILITY</span>
+          <ScreenStageLogo size={42} />
+          <span>{BRAND.productName} v1.1</span>
+          <span style={{ opacity: 0.45 }}>•</span>
+          <span style={{ color: "#e2e8f0" }}>MAC · WINDOWS · LINUX</span>
         </div>
 
-        <h1
-          style={{
-            fontSize: 78,
-            fontWeight: 800,
-            margin: "22px 0 12px",
-            letterSpacing: -2,
-            lineHeight: 1.05,
-            opacity: titleSpring,
-            transform: `translateY(${interpolate(titleSpring, [0, 1], [35, 0])}px)`,
-          }}
-        >
-          {frame < 130 ? (
-            <>
-              Multi-Monitor Setups{" "}
-              <span
-                style={{
-                  background: "linear-gradient(90deg, #fb7185, #f59e0b)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                Break Every Room.
-              </span>
-            </>
-          ) : (
-            <>
-              Now Every Room Just{" "}
-              <span
-                style={{
-                  background: "linear-gradient(90deg, #38bdf8, #34d399)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                Remembers Everything.
-              </span>
-            </>
-          )}
-        </h1>
+        {frame < SNAP_FRAME ? (
+          <KineticWords
+            fontSize={88}
+            startFrame={6}
+            staggerFrames={6}
+            lineHeight={1.04}
+            letterSpacing={-2.8}
+            words={[
+              { text: "Multi-Monitor" },
+              { text: "Setups", newlineAfter: true },
+              {
+                text: "Break",
+                gradient: "linear-gradient(90deg, #fb7185, #f59e0b)",
+              },
+              {
+                text: "Every",
+                gradient: "linear-gradient(90deg, #fb7185, #f59e0b)",
+              },
+              {
+                text: "Room.",
+                gradient: "linear-gradient(90deg, #fb7185, #f59e0b)",
+              },
+            ]}
+          />
+        ) : (
+          <KineticWords
+            fontSize={88}
+            startFrame={SNAP_FRAME}
+            staggerFrames={6}
+            lineHeight={1.04}
+            letterSpacing={-2.8}
+            words={[
+              { text: "Now" },
+              { text: "Every" },
+              { text: "Room", newlineAfter: true },
+              {
+                text: "Remembers",
+                gradient: "linear-gradient(90deg, #38bdf8, #34d399)",
+              },
+              {
+                text: "Everything.",
+                gradient: "linear-gradient(90deg, #38bdf8, #34d399)",
+              },
+            ]}
+          />
+        )}
 
         <p
           style={{
-            fontSize: 28,
-            color: "#94a3b8",
-            margin: 0,
+            fontSize: 34,
+            fontWeight: 600,
+            color: "#cbd5e1",
+            margin: "20px 0 0",
             opacity: subSpring,
+            letterSpacing: -0.5,
           }}
         >
-          {frame < 130
-            ? "Scrambled origins. Hidden laptops stealing Main. Cryptic display IDs."
-            : "Hardware UUID room detection • Monitor history • 1-click self-explanatory roles."}
+          {frame < SNAP_FRAME
+            ? "Scrambled screens. Closed laptops stealing Main. Dragging display boxes every day."
+            : "Automatic room detection · Monitor history · 1-click plain-English presets."}
         </p>
       </div>
 
-      {/* Animated Monitor Cards */}
+      {/* Animated Monitor Cards with Custom Vector SVGs */}
       <div
         style={{
           position: "absolute",
-          top: 430,
+          top: 470,
           left: "50%",
           width: 0,
           height: 0,
@@ -234,40 +260,48 @@ const Scene1Hook: React.FC = () => {
       >
         {monitors.map((m, i) => {
           const enter = spring({
-            frame: frame - m.delay,
+            frame: Math.max(0, frame - m.delay),
             fps,
             config: { damping: 12 },
           });
           const jitterX =
-            frame < 130 ? Math.sin((frame + i * 25) / 6) * 8 : 0;
+            frame < SNAP_FRAME ? Math.sin((frame + i * 25) / 6) * 8 : 0;
           const jitterY =
-            frame < 130 ? Math.cos((frame + i * 19) / 5) * 6 : 0;
+            frame < SNAP_FRAME ? Math.cos((frame + i * 19) / 5) * 6 : 0;
 
-          const curX = interpolate(snapProgress, [0, 1], [m.x + jitterX, (i - 1) * 430]);
-          const curY = interpolate(snapProgress, [0, 1], [m.y + jitterY, 70]);
+          const curX = interpolate(
+            snapProgress,
+            [0, 1],
+            [m.x + jitterX, (i - 1) * 515]
+          );
+          const curY = interpolate(snapProgress, [0, 1], [m.y + jitterY, 60]);
           const curRot = interpolate(snapProgress, [0, 1], [m.rot, 0]);
 
-          const fixedBadges = ["MAIN DESK (0,0)", "MIRRORS MAIN", "HIDDEN IN SPACE"];
-          const fixedColors = ["#3b82f6", "#10b981", "#64748b"];
-          const activeColor = frame < 130 ? m.color : fixedColors[i];
-          const activeBadge = frame < 130 ? m.badge : fixedBadges[i];
+          const fixedBadges = [
+            "MAIN DESK (0,0)",
+            "MIRRORS MAIN",
+            "HIDDEN IN SPACE",
+          ];
+          const fixedColors = ["#38bdf8", "#34d399", "#94a3b8"];
+          const activeColor = frame < SNAP_FRAME ? m.color : fixedColors[i];
+          const activeBadge = frame < SNAP_FRAME ? m.badge : fixedBadges[i];
 
           return (
             <div
               key={m.label}
               style={{
                 position: "absolute",
-                width: 390,
-                height: 230,
-                left: -195,
+                width: 475,
+                height: 270,
+                left: -237,
                 top: 0,
                 transform: `translate(${curX}px, ${curY}px) rotate(${curRot}deg) scale(${enter})`,
-                borderRadius: 22,
+                borderRadius: 26,
                 background:
-                  "linear-gradient(165deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.95))",
-                border: `2px solid ${activeColor}`,
-                boxShadow: `0 25px 60px -15px ${activeColor}44`,
-                padding: 26,
+                  "linear-gradient(165deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.97))",
+                border: `2.5px solid ${activeColor}`,
+                boxShadow: `0 28px 65px -15px ${activeColor}55`,
+                padding: "28px 32px",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
@@ -280,32 +314,29 @@ const Scene1Hook: React.FC = () => {
                   alignItems: "center",
                 }}
               >
-                <div style={{ display: "flex", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      background: activeColor,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 6,
-                      background: "rgba(255,255,255,0.18)",
-                    }}
-                  />
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 16,
+                    background: `${activeColor}22`,
+                    border: `1.5px solid ${activeColor}66`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {m.icon(activeColor)}
                 </div>
                 <span
                   style={{
                     fontFamily: MONO_FONT,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    padding: "5px 10px",
-                    borderRadius: 6,
+                    fontSize: 18,
+                    fontWeight: 900,
+                    padding: "8px 16px",
+                    borderRadius: 10,
                     background: `${activeColor}28`,
+                    border: `1.5px solid ${activeColor}`,
                     color: activeColor,
                   }}
                 >
@@ -316,25 +347,41 @@ const Scene1Hook: React.FC = () => {
               <div>
                 <div
                   style={{
-                    fontSize: 23,
-                    fontWeight: 700,
+                    fontSize: 30,
+                    fontWeight: 800,
                     color: "#f8fafc",
                     marginBottom: 6,
+                    letterSpacing: -0.5,
                   }}
                 >
                   {m.label}
                 </div>
-                <div style={{ fontSize: 15, color: "#94a3b8" }}>{m.sub}</div>
+                <div
+                  style={{ fontSize: 21, fontWeight: 600, color: "#cbd5e1" }}
+                >
+                  {m.sub}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Bottom Platform Row */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 52,
+          width: "100%",
+        }}
+      >
+        <PlatformBadgesRow startFrame={55} />
+      </div>
     </AbsoluteFill>
   );
 };
 
-// Scene 2: Real Native macOS App Showcase (Multi-Room + Single-Space Desktop Mode) (300 frames = 5.0s)
+// Scene 2: Real Uncrowded v1.1.0 App Showcase (450 frames = 7.5s)
 const Scene2NativeUI: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -345,102 +392,107 @@ const Scene2NativeUI: React.FC = () => {
     config: { damping: 14, stiffness: 110 },
   });
   const secondCardSpring = spring({
-    frame: frame - 45,
+    frame: Math.max(0, frame - 45),
     fps,
     config: { damping: 14, stiffness: 110 },
   });
 
-  const floatY = Math.sin(frame / 22) * 8;
+  const floatY = Math.sin(frame / 24) * 7;
 
   return (
     <AbsoluteFill style={{ fontFamily: FONT_FAMILY, color: "white" }}>
       <CyberBackground accent="#38bdf8" />
 
-      {/* Left Column: Feature Copy & Badges */}
+      {/* Left Column: Kinetic Headline & Feature Cards */}
       <div
         style={{
           position: "absolute",
-          left: 110,
-          top: 135,
-          width: 680,
+          left: 88,
+          top: 86,
+          width: 790,
           opacity: cardSpring,
           transform: `translateX(${interpolate(cardSpring, [0, 1], [-50, 0])}px)`,
         }}
       >
         <div
           style={{
-            display: "inline-block",
-            padding: "6px 14px",
-            borderRadius: 8,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "8px 18px",
+            borderRadius: 10,
             background: "rgba(56, 189, 248, 0.16)",
-            border: "1px solid rgba(56, 189, 248, 0.4)",
+            border: "1.5px solid rgba(56, 189, 248, 0.45)",
             color: "#38bdf8",
-            fontSize: 15,
-            fontWeight: 700,
+            fontSize: 19,
+            fontWeight: 800,
             letterSpacing: 1.2,
-            marginBottom: 20,
+            marginBottom: 18,
           }}
         >
-          100% NATIVE SWIFTUI + APPKIT
+          <ScreenStageLogo size={32} />
+          <span>UNCROWDED NATIVE v1.1 INTERFACE</span>
         </div>
 
-        <h2
-          style={{
-            fontSize: 64,
-            fontWeight: 800,
-            lineHeight: 1.06,
-            letterSpacing: -1.8,
-            margin: "0 0 22px",
-          }}
-        >
-          Meet{" "}
-          <span
-            style={{
-              background: "linear-gradient(90deg, #38bdf8, #818cf8)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            {BRAND.productName}
-          </span>{" "}
-          for macOS &amp; PC.
-        </h2>
+        <KineticWords
+          fontSize={72}
+          startFrame={4}
+          staggerFrames={6}
+          align="left"
+          lineHeight={1.04}
+          letterSpacing={-2.4}
+          words={[
+            { text: "Built" },
+            { text: "for" },
+            { text: "Real", newlineAfter: true },
+            {
+              text: "Studios",
+              gradient: "linear-gradient(90deg, #38bdf8, #34d399)",
+            },
+            { text: "&" },
+            {
+              text: "KVM",
+              gradient: "linear-gradient(90deg, #38bdf8, #818cf8)",
+            },
+            { text: "Rooms." },
+          ]}
+        />
 
         <p
           style={{
-            fontSize: 24,
-            lineHeight: 1.45,
+            fontSize: 27,
+            fontWeight: 600,
+            lineHeight: 1.4,
             color: "#cbd5e1",
-            marginBottom: 34,
+            margin: "18px 0 28px",
           }}
         >
-          A standalone menu bar and desktop app that learns every monitor in
-          every space, lets you edit plain-English descriptions, and switches
-          complex multi-screen setups in one click.
+          Remembers every monitor ever plugged into each room, edits
+          plain-English notes, and updates in one click.
         </p>
 
         {[
           {
             badge: "AUTO-DETECT",
             color: "#10b981",
-            title: "Hardware UUID Room Recognition",
-            desc: "Recognizes Studio A (84-101), Lab 84-102, or your Home Desk the instant you plug in.",
+            title: "Automatic Room Recognition",
+            desc: "Recognizes your Home Office, Recording Studio, or Conference Room on plug-in.",
           },
           {
             badge: "SMART HIDE",
-            color: "#3b82f6",
-            title: "Ignore Closed or Machine-Room Screens",
-            desc: "Laptop tucked in a rack? Hide it per space so preset badges only show the screens in front of you.",
+            color: "#38bdf8",
+            title: "Hide Closed or Docked Screens",
+            desc: "Laptop closed on a shelf? Hide it per room so preset buttons stay clean.",
           },
           {
-            badge: "ADAPTIVE UI",
-            color: "#a855f7",
-            title: "Single-Space Desktop or Multi-Room Laptop",
-            desc: "Fixed studio Macs show a zero-clutter single-space view; road laptops get instant room tabs.",
+            badge: "BUILTIN UPDATES",
+            color: "#c084fc",
+            title: "1-Click Updates & Diagnostic Support",
+            desc: "Built-in software updater and 1-click bug reporting right in the app.",
           },
         ].map((item, idx) => {
           const itemSpring = spring({
-            frame: frame - 18 - idx * 14,
+            frame: Math.max(0, frame - 22 - idx * 16),
             fps,
             config: { damping: 15 },
           });
@@ -450,12 +502,12 @@ const Scene2NativeUI: React.FC = () => {
               style={{
                 display: "flex",
                 alignItems: "flex-start",
-                gap: 16,
-                marginBottom: 20,
-                padding: "16px 20px",
-                borderRadius: 16,
-                background: "rgba(15, 23, 42, 0.78)",
-                border: "1px solid rgba(148, 163, 184, 0.16)",
+                gap: 18,
+                marginBottom: 18,
+                padding: "18px 22px",
+                borderRadius: 18,
+                background: "rgba(15, 23, 42, 0.85)",
+                border: `1.5px solid ${item.color}55`,
                 opacity: itemSpring,
                 transform: `translateY(${interpolate(itemSpring, [0, 1], [24, 0])}px)`,
               }}
@@ -463,11 +515,12 @@ const Scene2NativeUI: React.FC = () => {
               <span
                 style={{
                   fontFamily: MONO_FONT,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  padding: "5px 10px",
-                  borderRadius: 6,
-                  background: `${item.color}25`,
+                  fontSize: 15,
+                  fontWeight: 900,
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  background: `${item.color}28`,
+                  border: `1.5px solid ${item.color}`,
                   color: item.color,
                   marginTop: 3,
                   whiteSpace: "nowrap",
@@ -477,11 +530,18 @@ const Scene2NativeUI: React.FC = () => {
               </span>
               <div>
                 <div
-                  style={{ fontSize: 20, fontWeight: 700, color: "#f8fafc" }}
+                  style={{ fontSize: 24, fontWeight: 800, color: "#f8fafc" }}
                 >
                   {item.title}
                 </div>
-                <div style={{ fontSize: 15.5, color: "#94a3b8", marginTop: 3 }}>
+                <div
+                  style={{
+                    fontSize: 19,
+                    color: "#cbd5e1",
+                    marginTop: 4,
+                    fontWeight: 500,
+                  }}
+                >
                   {item.desc}
                 </div>
               </div>
@@ -490,26 +550,29 @@ const Scene2NativeUI: React.FC = () => {
         })}
       </div>
 
-      {/* Right Column: 3D Perspective Real App Screenshots */}
+      {/* Right Column: 3D Perspective Real v1.1.0 App Screenshots */}
       <div
         style={{
           position: "absolute",
-          right: 75,
-          top: 90,
-          width: 960,
-          height: 900,
+          right: 65,
+          top: 78,
+          width: 940,
+          height: 920,
         }}
       >
-        {/* Background Card: Single-Space Desktop Mode */}
         <div
           style={{
             position: "absolute",
-            right: 260,
+            right: 250,
             top: 20,
             width: 620,
-            transform: `perspective(1400px) rotateY(-14deg) rotateX(4deg) scale(${interpolate(secondCardSpring, [0, 1], [0.85, 0.92])}) translateY(${-floatY * 0.7}px)`,
-            opacity: interpolate(secondCardSpring, [0, 1], [0, 0.78]),
-            filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.65))",
+            transform: `perspective(1400px) rotateY(-12deg) rotateX(3deg) scale(${interpolate(
+              secondCardSpring,
+              [0, 1],
+              [0.85, 0.92]
+            )}) translateY(${-floatY * 0.7}px)`,
+            opacity: interpolate(secondCardSpring, [0, 1], [0, 0.8]),
+            filter: "drop-shadow(0 30px 60px rgba(0,0,0,0.68))",
           }}
         >
           <Img
@@ -518,16 +581,15 @@ const Scene2NativeUI: React.FC = () => {
           />
         </div>
 
-        {/* Foreground Card: Multi-Room Auto-Detected Mode */}
         <div
           style={{
             position: "absolute",
-            right: 10,
-            top: 95,
-            width: 680,
-            transform: `perspective(1400px) rotateY(-10deg) rotateX(3deg) scale(${cardSpring}) translateY(${floatY}px)`,
+            right: 0,
+            top: 90,
+            width: 700,
+            transform: `perspective(1400px) rotateY(-8deg) rotateX(2deg) scale(${cardSpring}) translateY(${floatY}px)`,
             filter:
-              "drop-shadow(0 40px 80px rgba(2, 6, 23, 0.9)) drop-shadow(0 0 40px rgba(56, 189, 248, 0.25))",
+              "drop-shadow(0 40px 80px rgba(2, 6, 23, 0.92)) drop-shadow(0 0 40px rgba(56, 189, 248, 0.28))",
           }}
         >
           <Img
@@ -540,45 +602,43 @@ const Scene2NativeUI: React.FC = () => {
   );
 };
 
-// Scene 3: Self-Explanatory Visual Role Chips + CLI Companion (290 frames = 4.8s)
+// Scene 3: Self-Explanatory Visual Role Chips + Cross-Platform CLI Companion (430 frames = 7.16s)
 const Scene3Architecture: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const headerSpring = spring({ frame, fps, config: { damping: 14 } });
-
   const presets = [
     {
-      title: "Mirror C27-30 (2) to TV",
-      desc: "C27-30 (2) Main Desk and Room TV show the same 1080p screen",
+      title: "Mirror Primary Desk to Room TV",
+      desc: "Primary Desk Monitor and Room TV show the same 1080p screen",
       chips: [
-        { name: "C27-30 (2)", role: "MAIN", color: "#3b82f6" },
-        { name: "TV (Blackmagic)", role: "MIRROR", color: "#10b981" },
+        { name: "Primary Desk", role: "MAIN", color: "#38bdf8" },
+        { name: "Room TV (KVM)", role: "MIRROR", color: "#34d399" },
       ],
     },
     {
-      title: "Extend C27-30 (2) + TV (2 Separate Desktops)",
-      desc: "C27-30 (2) is Main Desk; Room TV is extended right as a 2nd desktop",
+      title: "Extend Primary Desk + Room TV (2 Screens)",
+      desc: "Primary Desk is Main; Room TV extends right as a 2nd desktop",
       chips: [
-        { name: "C27-30 (2)", role: "MAIN", color: "#3b82f6" },
-        { name: "TV (Blackmagic)", role: "EXTEND", color: "#a855f7" },
+        { name: "Primary Desk", role: "MAIN", color: "#38bdf8" },
+        { name: "Room TV (KVM)", role: "EXTEND", color: "#c084fc" },
       ],
     },
     {
-      title: "TV Off · C27-30 (2) Desk Only",
-      desc: "Mutes Room TV for privacy; keeps C27-30 (2) Main Desk active",
+      title: "TV Off · Primary Desk Only",
+      desc: "Mutes Room TV for privacy; keeps Primary Desk Monitor active",
       chips: [
-        { name: "C27-30 (2)", role: "MAIN", color: "#3b82f6" },
-        { name: "TV (Blackmagic)", role: "OFF", color: "#64748b" },
+        { name: "Primary Desk", role: "MAIN", color: "#38bdf8" },
+        { name: "Room TV (KVM)", role: "OFF", color: "#94a3b8" },
       ],
     },
   ];
 
   const typedChars = Math.min(
-    46,
-    Math.max(0, Math.floor((frame - 35) * 0.95))
+    48,
+    Math.max(0, Math.floor((frame - 35) * 0.85))
   );
-  const cmdText = `$ displays apply 84-101 "Mirror C27-30"`.slice(0, typedChars);
+  const cmdText = `$ screenstage --apply "Mirror Primary Desk"`.slice(0, typedChars);
 
   return (
     <AbsoluteFill style={{ fontFamily: FONT_FAMILY, color: "white" }}>
@@ -587,64 +647,77 @@ const Scene3Architecture: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          top: 88,
+          top: 64,
           width: "100%",
           textAlign: "center",
-          opacity: headerSpring,
         }}
       >
-        <h2
+        <KineticWords
+          fontSize={74}
+          startFrame={4}
+          staggerFrames={6}
+          lineHeight={1.04}
+          letterSpacing={-2.4}
+          words={[
+            { text: "Self-Explanatory" },
+            { text: "Presets." },
+            { text: "GUI", color: "#38bdf8" },
+            { text: "+" },
+            { text: "CLI.", color: "#34d399" },
+          ]}
+        />
+        <p
           style={{
-            fontSize: 62,
-            fontWeight: 800,
-            margin: 0,
-            letterSpacing: -1.5,
+            fontSize: 29,
+            fontWeight: 600,
+            color: "#cbd5e1",
+            marginTop: 14,
           }}
         >
-          Self-Explanatory Presets.{" "}
-          <span style={{ color: "#38bdf8" }}>Menu Bar + CLI.</span>
-        </h2>
-        <p style={{ fontSize: 25, color: "#94a3b8", marginTop: 12 }}>
-          Every preset shows live monitor role pills and plain-English
-          descriptions you can edit anytime.
+          See what every monitor will do at a glance across macOS, Windows
+          10/11, and Linux.
         </p>
       </div>
 
-      {/* Center Interactive Preset Stack */}
+      {/* Left Interactive Preset Stack */}
       <div
         style={{
           position: "absolute",
-          top: 265,
-          left: 140,
-          width: 960,
+          top: 255,
+          left: 96,
+          width: 980,
           display: "flex",
           flexDirection: "column",
-          gap: 20,
+          gap: 22,
         }}
       >
         {presets.map((p, idx) => {
           const s = spring({
-            frame: frame - 14 - idx * 14,
+            frame: Math.max(0, frame - 18 - idx * 16),
             fps,
             config: { damping: 14 },
           });
-          const isSelected = idx === 0 && frame > 85;
+          const isSelected = idx === 0 && frame > 95;
           return (
             <div
               key={p.title}
               style={{
-                padding: "24px 30px",
-                borderRadius: 20,
+                padding: "26px 32px",
+                borderRadius: 22,
                 background: isSelected
-                  ? "linear-gradient(90deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.92))"
-                  : "rgba(15, 23, 42, 0.85)",
+                  ? "linear-gradient(90deg, rgba(56, 189, 248, 0.22), rgba(15, 23, 42, 0.95))"
+                  : "rgba(15, 23, 42, 0.88)",
                 border: isSelected
-                  ? "2px solid #38bdf8"
-                  : "1px solid rgba(148, 163, 184, 0.18)",
+                  ? "2.5px solid #38bdf8"
+                  : "1.5px solid rgba(148, 163, 184, 0.22)",
                 boxShadow: isSelected
-                  ? "0 20px 50px rgba(56, 189, 248, 0.22)"
-                  : "0 10px 30px rgba(0,0,0,0.4)",
-                transform: `scale(${s}) translateX(${interpolate(s, [0, 1], [-40, 0])}px)`,
+                  ? "0 22px 55px rgba(56, 189, 248, 0.25)"
+                  : "0 12px 32px rgba(0,0,0,0.45)",
+                transform: `scale(${s}) translateX(${interpolate(
+                  s,
+                  [0, 1],
+                  [-40, 0]
+                )}px)`,
                 opacity: s,
                 display: "flex",
                 justifyContent: "space-between",
@@ -652,18 +725,19 @@ const Scene3Architecture: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 25, fontWeight: 700 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 28, fontWeight: 800 }}>
                     {p.title}
                   </span>
                   {isSelected && (
                     <span
                       style={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        padding: "4px 10px",
+                        fontSize: 15,
+                        fontWeight: 900,
+                        padding: "5px 12px",
                         borderRadius: 999,
-                        background: "rgba(16, 185, 129, 0.2)",
+                        background: "rgba(16, 185, 129, 0.24)",
+                        border: "1.5px solid #34d399",
                         color: "#34d399",
                       }}
                     >
@@ -673,14 +747,15 @@ const Scene3Architecture: React.FC = () => {
                 </div>
                 <div
                   style={{
-                    fontSize: 17,
-                    color: "#94a3b8",
-                    margin: "6px 0 14px",
+                    fontSize: 20,
+                    fontWeight: 500,
+                    color: "#cbd5e1",
+                    margin: "8px 0 16px",
                   }}
                 >
                   {p.desc}
                 </div>
-                <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ display: "flex", gap: 14 }}>
                   {p.chips.map((c) => (
                     <div
                       key={c.name}
@@ -688,22 +763,23 @@ const Scene3Architecture: React.FC = () => {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 10,
-                        padding: "7px 14px",
-                        borderRadius: 10,
-                        background: "rgba(255,255,255,0.06)",
-                        fontSize: 16,
-                        fontWeight: 600,
+                        padding: "8px 16px",
+                        borderRadius: 12,
+                        background: "rgba(255,255,255,0.08)",
+                        fontSize: 19,
+                        fontWeight: 700,
                       }}
                     >
                       <span>{c.name}</span>
                       <span
                         style={{
                           fontFamily: MONO_FONT,
-                          fontSize: 13,
-                          fontWeight: 800,
-                          padding: "3px 8px",
-                          borderRadius: 6,
+                          fontSize: 16,
+                          fontWeight: 900,
+                          padding: "4px 10px",
+                          borderRadius: 8,
                           background: `${c.color}30`,
+                          border: `1.5px solid ${c.color}`,
                           color: c.color,
                         }}
                       >
@@ -716,12 +792,12 @@ const Scene3Architecture: React.FC = () => {
 
               <div
                 style={{
-                  padding: "12px 26px",
-                  borderRadius: 12,
-                  background: isSelected ? "#38bdf8" : "rgba(255,255,255,0.08)",
+                  padding: "14px 28px",
+                  borderRadius: 14,
+                  background: isSelected ? "#38bdf8" : "rgba(255,255,255,0.1)",
                   color: isSelected ? "#020617" : "#f8fafc",
-                  fontSize: 18,
-                  fontWeight: 700,
+                  fontSize: 21,
+                  fontWeight: 900,
                 }}
               >
                 {isSelected ? "Applied ✓" : "Apply"}
@@ -731,19 +807,19 @@ const Scene3Architecture: React.FC = () => {
         })}
       </div>
 
-      {/* Right Terminal Window */}
+      {/* Right Cross-Platform Terminal Window */}
       <div
         style={{
           position: "absolute",
-          top: 265,
-          right: 120,
-          width: 640,
-          height: 520,
-          borderRadius: 20,
+          top: 255,
+          right: 88,
+          width: 710,
+          height: 590,
+          borderRadius: 24,
           background: "#090d16",
-          border: "1px solid rgba(148, 163, 184, 0.25)",
-          boxShadow: "0 30px 70px rgba(0,0,0,0.7)",
-          padding: 28,
+          border: "2px solid rgba(148, 163, 184, 0.3)",
+          boxShadow: "0 30px 70px rgba(0,0,0,0.75)",
+          padding: 32,
           fontFamily: MONO_FONT,
         }}
       >
@@ -751,48 +827,56 @@ const Scene3Architecture: React.FC = () => {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
             marginBottom: 24,
             paddingBottom: 16,
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
           }}
         >
           <div
             style={{
-              width: 12,
-              height: 12,
-              borderRadius: 6,
+              width: 14,
+              height: 14,
+              borderRadius: 7,
               background: "#ef4444",
             }}
           />
           <div
             style={{
-              width: 12,
-              height: 12,
-              borderRadius: 6,
+              width: 14,
+              height: 14,
+              borderRadius: 7,
               background: "#f59e0b",
             }}
           />
           <div
             style={{
-              width: 12,
-              height: 12,
-              borderRadius: 6,
+              width: 14,
+              height: 14,
+              borderRadius: 7,
               background: "#10b981",
             }}
           />
           <span
             style={{
               marginLeft: 10,
-              fontSize: 14,
-              color: "#64748b",
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#94a3b8",
             }}
           >
-            zsh — displays CLI + ~/.config/displays/presets.json
+            macOS · Windows · Linux CLI
           </span>
         </div>
 
-        <div style={{ fontSize: 19, color: "#38bdf8", marginBottom: 18 }}>
+        <div
+          style={{
+            fontSize: 23,
+            fontWeight: 800,
+            color: "#38bdf8",
+            marginBottom: 22,
+          }}
+        >
           {cmdText}
           <span
             style={{
@@ -805,29 +889,31 @@ const Scene3Architecture: React.FC = () => {
           </span>
         </div>
 
-        {frame > 85 && (
-          <div style={{ fontSize: 16, lineHeight: 1.7, color: "#cbd5e1" }}>
-            <div style={{ color: "#34d399", fontWeight: 700 }}>
-              ✓ Detected Space: 84-101 (Studio A Control Room)
+        {frame > 95 && (
+          <div style={{ fontSize: 19, lineHeight: 1.75, color: "#e2e8f0" }}>
+            <div style={{ color: "#34d399", fontWeight: 800 }}>
+              ✓ Auto-Detected Space: Studio Control Room
             </div>
-            <div>• C27-30 (2) Desk: MAIN (1920x1080 @ 75Hz)</div>
-            <div>• TV (Blackmagic): MIRROR (1920x1080 @ 60Hz)</div>
-            <div style={{ color: "#64748b" }}>
-              • MacBook: HIDDEN (In machine room)
+            <div>• Primary Desk: MAIN (2560x1440 @ 60Hz)</div>
+            <div>• Room TV (KVM): MIRROR (1920x1080 @ 60Hz)</div>
+            <div style={{ color: "#94a3b8" }}>
+              • Docked Laptop: HIDDEN IN SPACE
             </div>
             <div
               style={{
-                marginTop: 22,
-                padding: 16,
-                borderRadius: 12,
-                background: "rgba(56, 189, 248, 0.08)",
-                border: "1px solid rgba(56, 189, 248, 0.25)",
+                marginTop: 26,
+                padding: 20,
+                borderRadius: 16,
+                background: "rgba(56, 189, 248, 0.1)",
+                border: "1.5px solid rgba(56, 189, 248, 0.35)",
                 color: "#7dd3fc",
-                fontSize: 14.5,
+                fontSize: 18,
+                lineHeight: 1.6,
               }}
             >
-              Dotfiles-ready JSON config at{" "}
-              <strong>~/.config/displays/presets.json</strong>
+              <div>• macOS: Menu Bar + Desktop App</div>
+              <div>• Windows 10/11: Desktop + KVM TV Switcher</div>
+              <div>• Linux: X11 &amp; Wayland Display Engine</div>
             </div>
           </div>
         )}
@@ -836,7 +922,7 @@ const Scene3Architecture: React.FC = () => {
   );
 };
 
-// Scene 4: Launch & Pricing CTA on buildforwardtech.com (285 frames = 4.75s)
+// Scene 4: Launch & Pricing CTA on buildforwardtech.com (405 frames = 6.75s)
 const Scene4CTA: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -862,7 +948,7 @@ const Scene4CTA: React.FC = () => {
         style={{
           textAlign: "center",
           transform: `scale(${scaleIn})`,
-          maxWidth: 1280,
+          maxWidth: 1440,
           padding: "0 40px",
         }}
       >
@@ -870,93 +956,59 @@ const Scene4CTA: React.FC = () => {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 12,
-            padding: "10px 24px",
+            gap: 16,
+            padding: "12px 28px",
             borderRadius: 999,
             background: "rgba(16, 185, 129, 0.16)",
-            border: "1px solid rgba(16, 185, 129, 0.45)",
+            border: "2px solid rgba(16, 185, 129, 0.5)",
             color: "#34d399",
-            fontSize: 20,
-            fontWeight: 700,
-            marginBottom: 28,
+            fontSize: 22,
+            fontWeight: 900,
+            marginBottom: 22,
           }}
         >
+          <ScreenStageLogo size={44} />
           <span>AVAILABLE NOW AT BUILD FORWARD TECH LABS</span>
         </div>
 
-        <h1
-          style={{
-            fontSize: 92,
-            fontWeight: 900,
-            letterSpacing: -2.5,
-            margin: "0 0 18px",
-            lineHeight: 1.02,
-          }}
-        >
-          {BRAND.productName} for macOS &amp; Windows
-        </h1>
+        <KineticWords
+          fontSize={86}
+          startFrame={6}
+          staggerFrames={6}
+          lineHeight={1.03}
+          letterSpacing={-2.6}
+          words={[
+            { text: BRAND.productName },
+            { text: "for" },
+            { text: "Mac,", color: "#38bdf8" },
+            { text: "Windows", color: "#34d399" },
+            { text: "&" },
+            { text: "Linux", color: "#c084fc" },
+          ]}
+        />
 
-        <p
-          style={{
-            fontSize: 32,
-            color: "#cbd5e1",
-            margin: "0 auto 48px",
-            maxWidth: 960,
-          }}
-        >
-          {BRAND.tagline} • Hardware UUID Room Detection • KVM Support
-        </p>
+        <div style={{ margin: "24px 0 36px" }}>
+          <PlatformBadgesRow startFrame={30} />
+        </div>
 
-        {/* Pricing / Edition Cards */}
+        {/* Pricing / Edition Cards (Commercial Tiers Only) */}
         <div
           style={{
             display: "flex",
             justifyContent: "center",
             gap: 32,
-            marginBottom: 52,
+            marginBottom: 42,
           }}
         >
           <div
             style={{
-              width: 440,
-              padding: "32px 36px",
-              borderRadius: 24,
-              background: "rgba(15, 23, 42, 0.85)",
-              border: "1px solid rgba(148, 163, 184, 0.25)",
-              textAlign: "left",
-            }}
-          >
-            <div style={{ fontSize: 18, color: "#94a3b8", fontWeight: 600 }}>
-              OPEN SOURCE EDITION
-            </div>
-            <div
-              style={{
-                fontSize: 48,
-                fontWeight: 800,
-                margin: "8px 0 12px",
-                color: "#f8fafc",
-              }}
-            >
-              Free{" "}
-              <span style={{ fontSize: 20, fontWeight: 500, color: "#64748b" }}>
-                / MIT Source
-              </span>
-            </div>
-            <div style={{ fontSize: 17, color: "#94a3b8", lineHeight: 1.5 }}>
-              Full SwiftUI source code + CLI companion on GitHub. Build from
-              source with Swift 6 & displayplacer.
-            </div>
-          </div>
-
-          <div
-            style={{
-              width: 480,
-              padding: "32px 36px",
-              borderRadius: 24,
+              width: 540,
+              padding: "32px 38px",
+              borderRadius: 26,
               background:
-                "linear-gradient(145deg, rgba(14, 165, 233, 0.24), rgba(16, 185, 129, 0.18))",
-              border: "2px solid #38bdf8",
-              boxShadow: "0 25px 60px rgba(56, 189, 248, 0.28)",
+                "linear-gradient(145deg, rgba(14, 165, 233, 0.26), rgba(15, 23, 42, 0.92))",
+              border: "2.5px solid #38bdf8",
+              boxShadow: "0 25px 60px rgba(56, 189, 248, 0.25)",
               textAlign: "left",
             }}
           >
@@ -967,38 +1019,106 @@ const Scene4CTA: React.FC = () => {
                 alignItems: "center",
               }}
             >
-              <span style={{ fontSize: 18, color: "#38bdf8", fontWeight: 700 }}>
-                SIGNED MACOS APP + CLI BUNDLE
+              <span style={{ fontSize: 20, color: "#38bdf8", fontWeight: 900 }}>
+                PERSONAL LICENSE (3 COMPUTERS)
               </span>
               <span
                 style={{
-                  fontSize: 13,
-                  fontWeight: 800,
-                  padding: "4px 10px",
+                  fontSize: 15,
+                  fontWeight: 900,
+                  padding: "5px 12px",
                   borderRadius: 999,
                   background: "#38bdf8",
                   color: "#020617",
                 }}
               >
-                INSTANT DOWNLOAD
+                ONE-TIME
               </span>
             </div>
             <div
               style={{
-                fontSize: 48,
-                fontWeight: 800,
+                fontSize: 56,
+                fontWeight: 900,
+                margin: "8px 0 12px",
+                color: "#f8fafc",
+              }}
+            >
+              {BRAND.priceIndividual}{" "}
+              <span style={{ fontSize: 24, fontWeight: 600, color: "#cbd5e1" }}>
+                / lifetime license
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: 21,
+                color: "#e2e8f0",
+                lineHeight: 1.45,
+                fontWeight: 500,
+              }}
+            >
+              Activate on up to 3 personal Macs, Windows PCs, or Linux machines
+              with unlimited rooms and presets.
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: 560,
+              padding: "32px 38px",
+              borderRadius: 26,
+              background:
+                "linear-gradient(145deg, rgba(16, 185, 129, 0.24), rgba(15, 23, 42, 0.92))",
+              border: "2.5px solid #34d399",
+              boxShadow: "0 25px 60px rgba(16, 185, 129, 0.25)",
+              textAlign: "left",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontSize: 20, color: "#34d399", fontWeight: 900 }}>
+                STUDIO &amp; TEAM PACK (15 COMPUTERS)
+              </span>
+              <span
+                style={{
+                  fontSize: 15,
+                  fontWeight: 900,
+                  padding: "5px 12px",
+                  borderRadius: 999,
+                  background: "#34d399",
+                  color: "#020617",
+                }}
+              >
+                LABS &amp; STUDIOS
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: 56,
+                fontWeight: 900,
                 margin: "8px 0 12px",
                 color: "#ffffff",
               }}
             >
-              {BRAND.priceIndividual}{" "}
-              <span style={{ fontSize: 20, fontWeight: 500, color: "#cbd5e1" }}>
-                one-time Ed25519 license
+              {BRAND.priceTeam}{" "}
+              <span style={{ fontSize: 24, fontWeight: 600, color: "#e2e8f0" }}>
+                / 15-seat pack
               </span>
             </div>
-            <div style={{ fontSize: 17, color: "#e2e8f0", lineHeight: 1.5 }}>
-              Developer-signed macOS + Windows 10/11 bundle, offline Ed25519
-              license key, CLI tool, and lifetime updates.
+            <div
+              style={{
+                fontSize: 21,
+                color: "#f1f5f9",
+                lineHeight: 1.45,
+                fontWeight: 500,
+              }}
+            >
+              Standardize multi-monitor control rooms, classrooms, and edit bays
+              across Mac, Windows, and Linux.
             </div>
           </div>
         </div>
@@ -1006,14 +1126,14 @@ const Scene4CTA: React.FC = () => {
         <div
           style={{
             display: "inline-block",
-            padding: "18px 42px",
-            borderRadius: 16,
+            padding: "18px 46px",
+            borderRadius: 18,
             background: "linear-gradient(90deg, #38bdf8, #10b981)",
             color: "#020617",
-            fontSize: 28,
-            fontWeight: 800,
+            fontSize: 32,
+            fontWeight: 900,
             fontFamily: MONO_FONT,
-            boxShadow: "0 20px 50px rgba(16, 185, 129, 0.35)",
+            boxShadow: "0 20px 50px rgba(16, 185, 129, 0.38)",
           }}
         >
           {BRAND.url}
@@ -1028,28 +1148,28 @@ export const DisplaysLaunchVideo: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: "#020409" }}>
       <Audio src={staticFile("soundtrack.mp3")} volume={0.9} />
       <TransitionSeries>
-        <TransitionSeries.Sequence durationInFrames={255}>
+        <TransitionSeries.Sequence durationInFrames={410}>
           <Scene1Hook />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={slide({ direction: "from-right" })}
-          timing={springTiming({ config: { damping: 16 }, durationInFrames: 25 })}
+          timing={springTiming({ config: { damping: 18 }, durationInFrames: 25 })}
         />
-        <TransitionSeries.Sequence durationInFrames={310}>
+        <TransitionSeries.Sequence durationInFrames={450}>
           <Scene2NativeUI />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={fade()}
-          timing={springTiming({ config: { damping: 16 }, durationInFrames: 25 })}
+          timing={springTiming({ config: { damping: 18 }, durationInFrames: 25 })}
         />
-        <TransitionSeries.Sequence durationInFrames={295}>
+        <TransitionSeries.Sequence durationInFrames={430}>
           <Scene3Architecture />
         </TransitionSeries.Sequence>
         <TransitionSeries.Transition
           presentation={slide({ direction: "from-bottom" })}
-          timing={springTiming({ config: { damping: 16 }, durationInFrames: 25 })}
+          timing={springTiming({ config: { damping: 18 }, durationInFrames: 25 })}
         />
-        <TransitionSeries.Sequence durationInFrames={295}>
+        <TransitionSeries.Sequence durationInFrames={405}>
           <Scene4CTA />
         </TransitionSeries.Sequence>
       </TransitionSeries>
