@@ -84,8 +84,8 @@
     .pill-off { background: rgba(156,163,175,0.18); color: #9ca3af; }
     .spaces-bar {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
-      overflow-x: auto;
       margin-bottom: 10px;
       padding-bottom: 2px;
     }
@@ -110,9 +110,9 @@
     }
     .monitors-strip {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
-      overflow-x: auto;
       padding: 4px 0 8px 0;
     }
     .mon-chip {
@@ -218,12 +218,14 @@
   <div class="header">
     <div class="header-title">
       <span>🖥 ScreenStage</span>
-      <span class="header-sub" id="headerSub">Monitor History & Presets (Windows)</span>
+      <span class="header-sub" id="headerSub">v1.1.0 · Windows</span>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
+      <button class="btn" id="updateBadgeBtn" onclick="openUpdateModal()">↻ Updates</button>
       <button class="btn" id="licenseBadgeBtn" onclick="openLicenseModal()">Activate Key</button>
+      <button class="btn" onclick="openBugModal()">🐞 Report Bug</button>
       <button class="btn" onclick="openNewSpaceModal()">+ Space</button>
-      <button class="btn" onclick="refreshState()">↻ Refresh</button>
+      <button class="btn" onclick="refreshState()">↻</button>
     </div>
   </div>
 
@@ -675,6 +677,75 @@
       closeModal();
       await refreshState();
       showToast('Verified Ed25519 License: ' + data.license.e);
+    }
+
+    function openBugModal() {
+      const m = document.getElementById('modalContent');
+      const connStr = (state.connected || []).map(d => `${d.name} (${d.resolution}@${d.hz}Hz)`).join('; ');
+      const diag = `ScreenStage v1.1.0 (Windows) · Space: ${(selectedFolder() || {}).name || 'none'} · Connected: [${connStr}]`;
+      m.innerHTML = `
+        <h3>🐞 Report a Bug or Layout Issue</h3>
+        <div class="field">
+          <label>Short Summary</label>
+          <input type="text" id="bugTitle" placeholder="e.g. KVM TV did not wake after switching preset" />
+        </div>
+        <div class="field">
+          <label>Steps to Reproduce / What Happened</label>
+          <input type="text" id="bugDetails" placeholder="Describe what happened..." />
+        </div>
+        <div style="font-family:monospace;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.05);padding:6px;border-radius:6px;margin-bottom:10px;">${diag}</div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitWindowsBug()">Submit Bug Report</button>
+        </div>
+      `;
+      document.getElementById('modalBackdrop').style.display = 'flex';
+    }
+
+    function submitWindowsBug() {
+      const title = document.getElementById('bugTitle').value.trim() || 'ScreenStage Windows Bug Report';
+      const details = document.getElementById('bugDetails').value.trim();
+      const connStr = (state.connected || []).map(d => `${d.name} (${d.resolution}@${d.hz}Hz)`).join('; ');
+      const body = `${details}\n\n### Diagnostics\nScreenStage v1.1.0 (Windows) · Connected: [${connStr}]`;
+      window.open(`https://github.com/theslyprofessor/displays/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`, '_blank');
+      closeModal();
+      showToast('Opened pre-filled GitHub Bug Report');
+    }
+
+    async function openUpdateModal() {
+      const m = document.getElementById('modalContent');
+      m.innerHTML = `
+        <h3>↻ ScreenStage Software Updates</h3>
+        <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.05);margin-bottom:12px;">
+          <div id="winUpdateStatus" style="font-weight:700;font-size:12px;">Checking for updates...</div>
+          <div id="winUpdateNotes" style="color:var(--muted);font-size:11px;margin-top:4px;">Current version: v1.1.0</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;">
+          <button class="btn" onclick="closeModal()">Close</button>
+          <a id="winUpdateDownloadBtn" href="https://buildforwardtech.com/releases/ScreenStage-Windows-v1.1.0.zip" target="_blank" class="btn btn-primary" style="text-decoration:none;display:none;">Download & Install Update</a>
+        </div>
+      `;
+      document.getElementById('modalBackdrop').style.display = 'flex';
+      try {
+        const res = await fetch('https://buildforwardtech.com/releases/version.json');
+        const manifest = await res.json();
+        const st = document.getElementById('winUpdateStatus');
+        const nt = document.getElementById('winUpdateNotes');
+        const dl = document.getElementById('winUpdateDownloadBtn');
+        if (manifest.version && manifest.version !== '1.1.0') {
+          st.textContent = `Update v${manifest.version} is available!`;
+          st.style.color = '#34d399';
+          nt.textContent = manifest.notes || '';
+          dl.href = manifest.winDownloadURL || 'https://buildforwardtech.com/releases/ScreenStage-Windows-v1.1.0.zip';
+          dl.style.display = 'inline-block';
+        } else {
+          st.textContent = '✓ ScreenStage v1.1.0 is up to date';
+          st.style.color = '#34d399';
+        }
+      } catch (e) {
+        const st = document.getElementById('winUpdateStatus');
+        if (st) st.textContent = '✓ ScreenStage v1.1.0 is up to date';
+      }
     }
 
     refreshState();

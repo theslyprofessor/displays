@@ -78,6 +78,214 @@ enum LicenseVerifier {
     }
 }
 
+// MARK: - Wrapping Flow Layout (Zero Clipping for Space Tabs, Monitors & Role Chips)
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 5
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? 620
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxUsedWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > 0 && currentX + size.width > maxWidth {
+                currentX = 0
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            maxUsedWidth = max(maxUsedWidth, currentX + size.width)
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? maxUsedWidth, height: currentY + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX > bounds.minX && currentX + size.width > bounds.maxX {
+                currentX = bounds.minX
+                currentY += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(size)
+            )
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Auto-Updater & Notification Manager (Checks GitHub Releases & BFT Manifest)
+
+struct ReleaseManifest: Codable {
+    let version: String
+    let notes: String
+    let macDownloadURL: String
+    let winDownloadURL: String
+}
+
+@MainActor
+final class UpdateManager: ObservableObject {
+    static let shared = UpdateManager()
+    static let currentVersion = "1.1.0"
+
+    @Published var checking = false
+    @Published var installing = false
+    @Published var availableVersion: String? = nil
+    @Published var releaseNotes: String = ""
+    @Published var downloadURL: String = "https://github.com/theslyprofessor/displays/releases/latest/download/ScreenStage-macOS-v1.1.0.zip"
+    @Published var statusText: String = "Up to date (v1.1.0)"
+    @Published var autoCheckEnabled: Bool = UserDefaults.standard.object(forKey: "ScreenStageAutoCheckUpdates") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoCheckEnabled, forKey: "ScreenStageAutoCheckUpdates") }
+    }
+    @Published var autoInstallEnabled: Bool = UserDefaults.standard.object(forKey: "ScreenStageAutoInstallUpdates") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(autoInstallEnabled, forKey: "ScreenStageAutoInstallUpdates") }
+    }
+
+    private var timer: Timer?
+
+    private init() {
+        if autoCheckEnabled {
+            Task { await checkForUpdates(silent: true) }
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, self.autoCheckEnabled else { return }
+                await self.checkForUpdates(silent: true)
+            }
+        }
+    }
+
+    static func isNewer(_ remote: String, than local: String) -> Bool {
+        let r = remote.trimmingCharacters(in: CharacterSet(charactersIn: "vV ")).split(separator: ".").compactMap { Int($0) }
+        let l = local.trimmingCharacters(in: CharacterSet(charactersIn: "vV ")).split(separator: ".").compactMap { Int($0) }
+        for i in 0..<max(r.count, l.count) {
+            let rv = i < r.count ? r[i] : 0
+            let lv = i < l.count ? l[i] : 0
+            if rv > lv { return true }
+            if rv < lv { return false }
+        }
+        return false
+    }
+
+    func checkForUpdates(silent: Bool = false) async {
+        checking = true
+        if !silent { statusText = "Checking for updates…" }
+        defer { checking = false }
+
+        // 1. Check fast BFT JSON manifest first, then GitHub Releases API fallback
+        let manifestURL = URL(string: "https://buildforwardtech.com/releases/version.json")!
+        if let (data, _) = try? await URLSession.shared.data(from: manifestURL),
+           let manifest = try? JSONDecoder().decode(ReleaseManifest.self, from: data) {
+            handleRemoteVersion(manifest.version, notes: manifest.notes, macURL: manifest.macDownloadURL, silent: silent)
+            return
+        }
+
+        let ghURL = URL(string: "https://api.github.com/repos/theslyprofessor/displays/releases/latest")!
+        var req = URLRequest(url: ghURL)
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        if let (data, _) = try? await URLSession.shared.data(for: req),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let tag = json["tag_name"] as? String {
+            let body = (json["body"] as? String) ?? "Bug fixes, layout improvements, and monitor history updates."
+            var assetURL = "https://github.com/theslyprofessor/displays/releases/latest/download/ScreenStage-macOS-\(tag).zip"
+            if let assets = json["assets"] as? [[String: Any]] {
+                for a in assets {
+                    if let name = a["name"] as? String,
+                       (name.contains("ScreenStage-macOS") || name.contains("Displays-macOS")),
+                       let dl = a["browser_download_url"] as? String {
+                        assetURL = dl
+                        break
+                    }
+                }
+            }
+            handleRemoteVersion(tag, notes: body, macURL: assetURL, silent: silent)
+            return
+        }
+
+        if !silent {
+            statusText = "ScreenStage v\(Self.currentVersion) is up to date"
+        }
+    }
+
+    private func handleRemoteVersion(_ remoteTag: String, notes: String, macURL: String, silent: Bool) {
+        let clean = remoteTag.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+        if Self.isNewer(clean, than: Self.currentVersion) {
+            availableVersion = clean
+            releaseNotes = notes
+            downloadURL = macURL
+            statusText = "Update v\(clean) available!"
+            if autoInstallEnabled {
+                Task { await downloadAndInstallUpdate() }
+            }
+        } else {
+            availableVersion = nil
+            statusText = "Up to date (v\(Self.currentVersion))"
+        }
+    }
+
+    func downloadAndInstallUpdate() async {
+        guard let url = URL(string: downloadURL) else { return }
+        installing = true
+        statusText = "Downloading ScreenStage update…"
+        defer { installing = false }
+
+        do {
+            let (tmpFile, _) = try await URLSession.shared.download(from: url)
+            let stagingDir = FileManager.default.temporaryDirectory.appendingPathComponent("ScreenStageUpdate-\(Int(Date().timeIntervalSince1970))")
+            try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+
+            let unzip = Process()
+            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            unzip.arguments = ["-x", "-k", tmpFile.path, stagingDir.path]
+            try unzip.run()
+            unzip.waitUntilExit()
+
+            let candidateScreenStage = stagingDir.appendingPathComponent("ScreenStage.app")
+            let candidateDisplays = stagingDir.appendingPathComponent("Displays.app")
+            let extractedApp = FileManager.default.fileExists(atPath: candidateDisplays.path) ? candidateDisplays : candidateScreenStage
+
+            guard FileManager.default.fileExists(atPath: extractedApp.path) else {
+                statusText = "Update archive did not contain an app bundle."
+                return
+            }
+
+            let targetBundle = Bundle.main.bundleURL.pathExtension == "app"
+                ? Bundle.main.bundleURL
+                : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications/Displays.app")
+
+            statusText = "Installing update & relaunching…"
+            let pid = ProcessInfo.processInfo.processIdentifier
+            let script = """
+            sleep 0.6
+            rm -rf "\(targetBundle.path)"
+            mv "\(extractedApp.path)" "\(targetBundle.path)"
+            open "\(targetBundle.path)"
+            """
+            let updater = Process()
+            updater.executableURL = URL(fileURLWithPath: "/bin/sh")
+            updater.arguments = ["-c", "kill \(pid) >/dev/null 2>&1 || true; \(script)"]
+            try updater.run()
+            NSApp.terminate(nil)
+        } catch {
+            statusText = "Update failed: \(error.localizedDescription)"
+        }
+    }
+}
+
 // MARK: - Models
 
 enum DisplayRole: String, CaseIterable, Codable, Identifiable {
@@ -1093,78 +1301,76 @@ struct RoomHardwareStripView: View {
         let monitors = folder.resolvedMonitors
 
         VStack(alignment: .leading, spacing: 4) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    Text("MONITORS IN SPACE:")
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: true, vertical: false)
+            FlowLayout(spacing: 6, lineSpacing: 5) {
+                Text("MONITORS IN SPACE:")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
 
-                    ForEach(monitors) { item in
-                        let isConn = connectedIDs.contains(item.id)
-                        Button {
-                            editingMonitor = item
-                        } label: {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(isConn ? Color.green : Color.secondary.opacity(0.4))
-                                    .frame(width: 5.5, height: 5.5)
-                                Image(systemName: item.ignoredInSpace ? "eye.slash" : item.icon)
-                                    .font(.system(size: 9.5, weight: .semibold))
-                                    .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
-                                Text(item.label)
-                                    .font(.system(size: 10.5, weight: .semibold))
-                                    .lineLimit(1)
-                                    .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
-                                if !item.note.isEmpty {
-                                    Text("· \(item.note)")
-                                        .font(.system(size: 9.5))
-                                        .lineLimit(1)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if item.ignoredInSpace {
-                                    Text("HIDDEN")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .padding(.horizontal, 3.5)
-                                        .padding(.vertical, 0.5)
-                                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.2)))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .fixedSize(horizontal: true, vertical: false)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(isConn && !item.ignoredInSpace ? Color.green.opacity(0.08) : Color.primary.opacity(0.04))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .stroke(isConn && !item.ignoredInSpace ? Color.green.opacity(0.28) : Color.primary.opacity(0.08), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .help("Click to edit '\(item.label)' name, history note, or hide/show in presets")
-                    }
-
+                ForEach(monitors) { item in
+                    let isConn = connectedIDs.contains(item.id)
                     Button {
-                        showingAddMonitor = true
+                        editingMonitor = item
                     } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 9, weight: .bold))
-                            Text("Monitor")
-                                .font(.system(size: 9.5, weight: .medium))
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(isConn ? Color.green : Color.secondary.opacity(0.4))
+                                .frame(width: 5.5, height: 5.5)
+                            Image(systemName: item.ignoredInSpace ? "eye.slash" : item.icon)
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
+                            Text(item.label)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .lineLimit(1)
+                                .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
+                            if !item.note.isEmpty {
+                                Text("· \(item.note)")
+                                    .font(.system(size: 9.5))
+                                    .lineLimit(1)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if item.ignoredInSpace {
+                                Text("HIDDEN")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 3.5)
+                                    .padding(.vertical, 0.5)
+                                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.2)))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 7)
                         .padding(.vertical, 3.5)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.04)))
-                        .foregroundStyle(.secondary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(isConn && !item.ignoredInSpace ? Color.green.opacity(0.08) : Color.primary.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(isConn && !item.ignoredInSpace ? Color.green.opacity(0.28) : Color.primary.opacity(0.08), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
-                    .help("Add a monitor note to this space's history (e.g. a monitor connected to another machine in the room)")
+                    .help("Click to edit '\(item.label)' name, history note, or hide/show in presets")
                 }
+
+                Button {
+                    showingAddMonitor = true
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("Monitor")
+                            .font(.system(size: 9.5, weight: .medium))
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3.5)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.04)))
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Add a monitor note to this space's history (e.g. a monitor connected to another machine in the room)")
             }
         }
         .sheet(item: $editingMonitor) { mon in
@@ -1262,136 +1468,137 @@ struct PresetRowView: View {
 
     var body: some View {
         let badges = store.monitorBadges(for: preset, in: folder)
-        HStack(spacing: 10) {
-            Button {
-                store.applyPreset(preset)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: preset.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isActive ? .green : .accentColor)
-                        .frame(width: 22)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 10) {
+                Button {
+                    store.applyPreset(preset)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: preset.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(isActive ? .green : .accentColor)
+                            .frame(width: 22)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(preset.name)
-                                .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            if isActive {
-                                Text("ACTIVE")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(Color.green.opacity(0.2)))
-                                    .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(preset.name)
+                                    .font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                if isActive {
+                                    Text("ACTIVE")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(Color.green.opacity(0.2)))
+                                        .foregroundStyle(.green)
+                                }
+                            }
+
+                            if !preset.subtitle.isEmpty {
+                                Text(preset.subtitle)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
                         }
+                        Spacer(minLength: 4)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-                        if !preset.subtitle.isEmpty {
-                            Text(preset.subtitle)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+                Button {
+                    showingEditPreset = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Edit preset name, description text, or layout command")
 
-                        if !badges.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 5) {
-                                    ForEach(badges) { b in
-                                        HStack(spacing: 4) {
-                                            Image(systemName: b.icon)
-                                                .font(.system(size: 9.5, weight: .semibold))
-                                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
-                                            Text(b.name)
-                                                .font(.system(size: 10.5, weight: .medium))
-                                                .lineLimit(1)
-                                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
-                                            Text(b.roleLabel)
-                                                .font(.system(size: 8.5, weight: .bold))
-                                                .lineLimit(1)
-                                                .padding(.horizontal, 4.5)
-                                                .padding(.vertical, 1)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 3)
-                                                        .fill(b.roleColor.opacity(0.18))
-                                                )
-                                                .foregroundStyle(b.roleColor)
-                                        }
-                                        .fixedSize(horizontal: true, vertical: false)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 5)
-                                                .fill(Color.primary.opacity(0.05))
-                                        )
-                                    }
+                Button("Apply") {
+                    store.applyPreset(preset)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(store.busy)
+
+                Menu {
+                    Button("Apply Preset") {
+                        store.applyPreset(preset)
+                    }
+                    Button("Edit Name & Description…") {
+                        showingEditPreset = true
+                    }
+                    Button("Overwrite with Current Screen Layout") {
+                        store.overwritePresetWithCurrent(folderID: folder.id, presetID: preset.id)
+                    }
+                    Button("Copy displayplacer Command") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(store.resolveCommand(preset.command), forType: .string)
+                        store.statusMessage = "Copied command to clipboard"
+                    }
+                    if store.root.folders.count > 1 {
+                        Divider()
+                        Menu("Move to Space") {
+                            ForEach(store.root.folders.filter { $0.id != folder.id }) { target in
+                                Button(target.name) {
+                                    store.movePreset(fromFolderID: folder.id, presetID: preset.id, toFolderID: target.id)
                                 }
                             }
                         }
                     }
-                    Spacer(minLength: 4)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                showingEditPreset = true
-            } label: {
-                Image(systemName: "pencil")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("Edit preset name, description text, or layout command")
-
-            Button("Apply") {
-                store.applyPreset(preset)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(store.busy)
-
-            Menu {
-                Button("Apply Preset") {
-                    store.applyPreset(preset)
-                }
-                Button("Edit Name & Description…") {
-                    showingEditPreset = true
-                }
-                Button("Overwrite with Current Screen Layout") {
-                    store.overwritePresetWithCurrent(folderID: folder.id, presetID: preset.id)
-                }
-                Button("Copy displayplacer Command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(store.resolveCommand(preset.command), forType: .string)
-                    store.statusMessage = "Copied command to clipboard"
-                }
-                if store.root.folders.count > 1 {
                     Divider()
-                    Menu("Move to Space") {
-                        ForEach(store.root.folders.filter { $0.id != folder.id }) { target in
-                            Button(target.name) {
-                                store.movePreset(fromFolderID: folder.id, presetID: preset.id, toFolderID: target.id)
-                            }
+                    Button("Delete Preset", role: .destructive) {
+                        store.deletePreset(folderID: folder.id, presetID: preset.id)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .frame(width: 22)
+            }
+
+            if !badges.isEmpty {
+                FlowLayout(spacing: 6, lineSpacing: 5) {
+                    ForEach(badges) { b in
+                        HStack(spacing: 4) {
+                            Image(systemName: b.icon)
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                            Text(b.name)
+                                .font(.system(size: 10.5, weight: .medium))
+                                .lineLimit(1)
+                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                            Text(b.roleLabel)
+                                .font(.system(size: 8.5, weight: .bold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3.5)
+                                        .fill(b.roleColor.opacity(0.18))
+                                )
+                                .foregroundStyle(b.roleColor)
                         }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2.5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(Color.primary.opacity(0.05))
+                        )
                     }
                 }
-                Divider()
-                Button("Delete Preset", role: .destructive) {
-                    store.deletePreset(folderID: folder.id, presetID: preset.id)
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                .padding(.leading, 32)
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 22)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 7)
                 .fill(isActive ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
@@ -1599,8 +1806,204 @@ struct EditSpaceSheet: View {
     }
 }
 
+struct BugReportSheet: View {
+    @ObservedObject var store: DisplayStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var bugTitle: String = ""
+    @State private var bugDetails: String = ""
+    @State private var reporterEmail: String = ""
+    @State private var includeDiagnostics: Bool = true
+    @State private var submitStatus: String? = nil
+
+    var diagnosticSummary: String {
+        let osVer = ProcessInfo.processInfo.operatingSystemVersionString
+        let space = store.selectedFolder?.name ?? "unknown"
+        let conn = store.connected.map { "\($0.name) (\($0.resolution)@\($0.hz)Hz, main:\($0.isMain))" }.joined(separator: "; ")
+        return "ScreenStage v\(UpdateManager.currentVersion) · macOS \(osVer) · Space: \(space) · Connected (\(store.connected.count)): [\(conn)]"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "ladybug.fill")
+                    .foregroundStyle(.orange)
+                Text("Report a Bug or Layout Issue")
+                    .font(.headline)
+            }
+
+            TextField("Short Summary (e.g. KVM TV did not wake after switching preset)", text: $bugTitle)
+                .textFieldStyle(.roundedBorder)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What happened & steps to reproduce:")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $bugDetails)
+                    .font(.system(size: 11.5))
+                    .frame(height: 85)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.15), lineWidth: 1))
+            }
+
+            TextField("Your Email (optional, for fix notification)", text: $reporterEmail)
+                .textFieldStyle(.roundedBorder)
+
+            Toggle("Include monitor & space diagnostic snapshot", isOn: $includeDiagnostics)
+                .font(.system(size: 11.5))
+
+            if includeDiagnostics {
+                Text(diagnosticSummary)
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.1)))
+            }
+
+            if let msg = submitStatus {
+                Text(msg)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.green)
+            }
+
+            HStack(spacing: 8) {
+                Button("Copy Diagnostics") {
+                    let full = "Title: \(bugTitle)\nDetails: \(bugDetails)\nEmail: \(reporterEmail)\nDiagnostics: \(diagnosticSummary)"
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(full, forType: .string)
+                    submitStatus = "✓ Copied diagnostic report to clipboard"
+                }
+                .controlSize(.small)
+
+                Button("Email Support") {
+                    let subj = (bugTitle.isEmpty ? "ScreenStage Bug Report" : "ScreenStage Bug: \(bugTitle)")
+                        .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "ScreenStage%20Bug"
+                    let bodyRaw = "\(bugDetails)\n\n---\n\(includeDiagnostics ? diagnosticSummary : "")"
+                    let bodyEnc = bodyRaw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    if let url = URL(string: "mailto:vinnie@buildforwardtech.com?subject=\(subj)&body=\(bodyEnc)") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+
+                Spacer()
+
+                Button("Cancel") { dismiss() }
+
+                Button("Submit Bug Report") {
+                    submitBugReport()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(bugTitle.trimmingCharacters(in: .whitespaces).isEmpty && bugDetails.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 490)
+    }
+
+    private func submitBugReport() {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/displays/bug-reports")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let report: [String: String] = [
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "title": bugTitle.isEmpty ? "ScreenStage Bug Report" : bugTitle,
+            "details": bugDetails,
+            "email": reporterEmail,
+            "diagnostics": includeDiagnostics ? diagnosticSummary : ""
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) {
+            let file = dir.appendingPathComponent("bug-\(Int(Date().timeIntervalSince1970)).json")
+            try? data.write(to: file)
+        }
+
+        let titleEnc = (bugTitle.isEmpty ? "ScreenStage Bug Report" : bugTitle)
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "Bug%20Report"
+        let bodyRaw = "\(bugDetails)\n\n### Diagnostics\n`\(includeDiagnostics ? diagnosticSummary : "omitted")`\nReporter: \(reporterEmail)"
+        let bodyEnc = bodyRaw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let ghURL = URL(string: "https://github.com/theslyprofessor/displays/issues/new?title=\(titleEnc)&body=\(bodyEnc)") {
+            NSWorkspace.shared.open(ghURL)
+        }
+        submitStatus = "✓ Saved locally & opened pre-filled GitHub Issue"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            dismiss()
+        }
+    }
+}
+
+struct UpdateSheet: View {
+    @ObservedObject var updater: UpdateManager
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.accentColor)
+                Text("ScreenStage Software Updates")
+                    .font(.headline)
+                Spacer()
+                Text("Current: v\(UpdateManager.currentVersion)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Text(updater.statusText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(updater.availableVersion != nil ? .green : .primary)
+                Spacer()
+                if updater.checking || updater.installing {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+
+            if !updater.releaseNotes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Release Notes:")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(updater.releaseNotes)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(4)
+                }
+            }
+
+            Toggle("Automatically check for updates & notify me", isOn: $updater.autoCheckEnabled)
+                .font(.system(size: 12))
+
+            Toggle("Automatically download & install updates in background", isOn: $updater.autoInstallEnabled)
+                .font(.system(size: 12))
+
+            HStack {
+                Button("Check Now") {
+                    Task { await updater.checkForUpdates(silent: false) }
+                }
+                .disabled(updater.checking || updater.installing)
+
+                Spacer()
+
+                Button("Close") { dismiss() }
+
+                if let nextVer = updater.availableVersion {
+                    Button("Install v\(nextVer) & Relaunch") {
+                        Task { await updater.downloadAndInstallUpdate() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(updater.installing)
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 450)
+    }
+}
+
 struct MainPanelView: View {
     @ObservedObject var store: DisplayStore
+    @ObservedObject private var updater = UpdateManager.shared
     let isStandaloneWindow: Bool
     @State private var atLogin = SMAppService.mainApp.status == .enabled
     @State private var showingNewFolder = false
@@ -1609,22 +2012,60 @@ struct MainPanelView: View {
     @State private var editingSpace: MachineFolder? = nil
     @State private var license: LicensePayload? = LicenseVerifier.loadVerifiedLicense()
     @State private var showingLicenseSheet = false
+    @State private var showingBugSheet = false
+    @State private var showingUpdateSheet = false
     @State private var licenseInput = ""
     @State private var licenseError: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Header
+            // Header (Clean & Uncrowded — Zero Truncation)
             HStack(spacing: 8) {
                 Image(systemName: "display.2")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.accentColor)
                 Text("ScreenStage")
                     .font(.system(size: 15, weight: .bold))
-                Text(store.root.folders.count > 1 ? "Monitor History & Room Presets" : "Monitor History & Presets")
-                    .font(.system(size: 12))
+                Text("v\(UpdateManager.currentVersion)")
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
                     .foregroundStyle(.secondary)
+
                 Spacer()
+
+                Button {
+                    showingUpdateSheet = true
+                    Task { await updater.checkForUpdates(silent: false) }
+                } label: {
+                    if let newVer = updater.availableVersion {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 10))
+                            Text("Update v\(newVer)")
+                                .font(.system(size: 9.5, weight: .bold))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.orange.opacity(0.2)))
+                        .foregroundStyle(.orange)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 9.5))
+                            Text("Updates")
+                                .font(.system(size: 9.5, weight: .medium))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Check for ScreenStage updates and configure automatic updates")
+
                 Button {
                     licenseError = nil
                     licenseInput = (try? String(contentsOf: LicenseVerifier.licenseFileURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -1657,6 +2098,23 @@ struct MainPanelView: View {
                 .buttonStyle(.plain)
                 .help(license != nil ? "Ed25519 Verified License: \(license!.e)" : "Activate offline Ed25519 MM1-... license key")
 
+                Button {
+                    showingBugSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "ladybug")
+                            .font(.system(size: 10))
+                        Text("Report Bug")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Report a bug or display layout issue with 1-click diagnostics")
+
                 if store.busy {
                     ProgressView().controlSize(.small)
                 }
@@ -1672,10 +2130,35 @@ struct MainPanelView: View {
                 }
             }
 
+            // Update Notification Banner (when a newer version is available)
+            if let newVer = updater.availableVersion {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.orange)
+                    Text("ScreenStage v\(newVer) is available!")
+                        .font(.system(size: 11.5, weight: .bold))
+                    Text(updater.releaseNotes)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Install & Relaunch") {
+                        Task { await updater.downloadAndInstallUpdate() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(updater.installing)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.35), lineWidth: 1))
+            }
+
             // Connected Monitors + Quick Role Matrix
             ConnectedDisplaysCard(store: store)
 
-            // Multi-Space Tabs (automatically hidden when a desktop Mac only has 1 space!)
+            // Multi-Space Tabs (FlowLayout — Zero Clipping on 84-105 or Extra Rooms!)
             if store.root.folders.count > 1 {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
@@ -1697,42 +2180,41 @@ struct MainPanelView: View {
                         .buttonStyle(.borderless)
                     }
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(store.root.folders) { folder in
-                                let selected = store.root.selectedFolderID == folder.id
-                                let isHere = store.detectedFolderID == folder.id
-                                Button {
-                                    store.root.selectedFolderID = folder.id
-                                    store.save()
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Image(systemName: selected ? "folder.fill" : "folder")
-                                            .font(.system(size: 11))
-                                        Text(folder.name)
-                                            .font(.system(size: 12, weight: selected ? .bold : .medium))
-                                        if isHere {
-                                            Circle()
-                                                .fill(Color.green)
-                                                .frame(width: 6, height: 6)
-                                                .help("Connected monitors match \(folder.name)")
-                                        }
-                                        Text("\(folder.presets.count)")
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 1)
-                                            .background(Capsule().fill(Color.primary.opacity(0.1)))
+                    FlowLayout(spacing: 6, lineSpacing: 6) {
+                        ForEach(store.root.folders) { folder in
+                            let selected = store.root.selectedFolderID == folder.id
+                            let isHere = store.detectedFolderID == folder.id
+                            Button {
+                                store.root.selectedFolderID = folder.id
+                                store.save()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: selected ? "folder.fill" : "folder")
+                                        .font(.system(size: 11))
+                                    Text(folder.name)
+                                        .font(.system(size: 12, weight: selected ? .bold : .medium))
+                                    if isHere {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 6, height: 6)
+                                            .help("Connected monitors match \(folder.name)")
                                     }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 7)
-                                            .fill(selected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                    )
-                                    .foregroundStyle(selected ? Color.white : Color.primary)
+                                    Text("\(folder.presets.count)")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(Color.primary.opacity(0.1)))
                                 }
-                                .buttonStyle(.plain)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(selected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                )
+                                .foregroundStyle(selected ? Color.white : Color.primary)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -1796,7 +2278,7 @@ struct MainPanelView: View {
                         .frame(width: 20)
                     }
 
-                    // Monitor History Strip (click any monitor to edit its name/note or hide it in this space)
+                    // Monitor History Strip (FlowLayout — wraps cleanly, zero clipping)
                     RoomHardwareStripView(folder: folder, store: store)
 
                     // Presets List
@@ -1843,14 +2325,34 @@ struct MainPanelView: View {
             Divider()
 
             // Footer
-            HStack {
+            HStack(spacing: 12) {
                 Button("System Display Settings…") {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!)
                 }
                 .buttonStyle(.link)
                 .font(.system(size: 11))
 
+                Button("Check for Updates…") {
+                    showingUpdateSheet = true
+                    Task { await updater.checkForUpdates(silent: false) }
+                }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                Button("Report a Bug…") {
+                    showingBugSheet = true
+                }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
                 Spacer()
+
+                Toggle("Auto-update", isOn: $updater.autoCheckEnabled)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+                    .help("Automatically check and notify when a new ScreenStage update is released")
 
                 Toggle("Open at login", isOn: Binding(get: { atLogin }, set: { v in
                     do {
@@ -1869,9 +2371,9 @@ struct MainPanelView: View {
                 .font(.system(size: 11))
             }
         }
-        .padding(12)
-        .frame(width: isStandaloneWindow ? nil : 600)
-        .frame(minWidth: 600, minHeight: isStandaloneWindow ? 640 : nil)
+        .padding(14)
+        .frame(width: isStandaloneWindow ? nil : 660)
+        .frame(minWidth: 660, minHeight: isStandaloneWindow ? 660 : nil)
         .sheet(isPresented: $showingNewFolder) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Add Space / Room")
@@ -1896,6 +2398,12 @@ struct MainPanelView: View {
         }
         .sheet(item: $editingSpace) { sp in
             EditSpaceSheet(folder: sp, store: store)
+        }
+        .sheet(isPresented: $showingBugSheet) {
+            BugReportSheet(store: store)
+        }
+        .sheet(isPresented: $showingUpdateSheet) {
+            UpdateSheet(updater: updater)
         }
         .sheet(isPresented: $showingLicenseSheet) {
             VStack(alignment: .leading, spacing: 12) {
@@ -1964,7 +2472,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
             let w = NSWindow(contentViewController: NSHostingController(rootView: rootView))
             w.title = "ScreenStage · Monitor History & Layout Presets"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.setContentSize(NSSize(width: 620, height: 680))
+            w.setContentSize(NSSize(width: 680, height: 720))
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -1998,7 +2506,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         self.statusItem = item
 
         if let button = item.button {
-            let img = NSImage(systemSymbolName: "display.2", accessibilityDescription: "Displays")
+            let img = NSImage(systemSymbolName: "display.2", accessibilityDescription: "ScreenStage")
             img?.isTemplate = true
             button.image = img
             button.imagePosition = .imageLeading
@@ -2062,8 +2570,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         DisplayStore.shared.refreshDisplays()
         if let hosting = pop.contentViewController as? NSHostingController<MainPanelView> {
-            let fit = hosting.sizeThatFits(in: NSSize(width: 600, height: 1200))
-            pop.contentSize = NSSize(width: max(600, fit.width), height: max(460, fit.height))
+            let fit = hosting.sizeThatFits(in: NSSize(width: 660, height: 1200))
+            pop.contentSize = NSSize(width: max(660, fit.width), height: max(480, fit.height))
         }
         if button.window != nil && button.window!.frame.origin.x > 0 {
             pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
