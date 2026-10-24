@@ -1,8 +1,10 @@
-// Displays.app: Native macOS menu bar + window app for organizing and switching
-// multi-monitor display presets by classroom/machine folder (84-101, 84-102, 84-105, etc.).
+// Displays.app: Native macOS menu bar + window app for managing multi-monitor
+// display presets, per-space monitor history, and one-click layout switching.
 //
-// Standalone native SwiftUI app (no SwiftBar/Hammerspoon dependencies), signed with
-// Apple Development identity so Login Item and system permissions persist across rebuilds.
+// Designed as a general-purpose standalone SwiftUI Mac app (no SwiftBar/Hammerspoon
+// dependencies). Single-space desktop Macs show a clean single-room view; multi-room
+// laptops can organize spaces/folders (e.g. 84-101, 84-102, 84-105) with full editable
+// monitor history, editable descriptions, and per-space ignored displays.
 
 import AppKit
 import CoreGraphics
@@ -23,19 +25,10 @@ enum DisplayRole: String, CaseIterable, Codable, Identifiable {
     var label: String {
         switch self {
         case .main: return "Main (Primary)"
-        case .mirrorMain: return "Mirror Main (Broadcast)"
+        case .mirrorMain: return "Mirror Main"
         case .extendRight: return "Extend Right"
         case .extendLeft: return "Extend Left"
-        case .off: return "Off (Privacy)"
-        }
-    }
-
-    var badgeColor: Color {
-        switch self {
-        case .main: return .blue
-        case .mirrorMain: return .green
-        case .extendRight, .extendLeft: return .purple
-        case .off: return .secondary
+        case .off: return "Off (Muted)"
         }
     }
 }
@@ -43,7 +36,7 @@ enum DisplayRole: String, CaseIterable, Codable, Identifiable {
 struct ConnectedDisplay: Identifiable, Equatable {
     let id: String          // Persistent UUID from displayplacer / CoreGraphics
     let cgID: UInt32        // Contextual CGDirectDisplayID
-    let name: String        // Human-readable name (e.g. "C27-30", "MacBook Pro", "Blackmagic")
+    let name: String        // Hardware / resolved name
     let typeLabel: String   // e.g. "27 inch external screen"
     let resolution: String  // e.g. "1920x1080"
     let hz: Int             // e.g. 75, 120, 60
@@ -52,6 +45,14 @@ struct ConnectedDisplay: Identifiable, Equatable {
     let isMain: Bool
     let isBuiltIn: Bool
     let mirrorMasterID: UInt32
+}
+
+struct MonitorRecord: Identifiable, Codable, Equatable {
+    var id: String              // Persistent UUID (or custom ID for historical reference monitors)
+    var label: String           // Short user-editable name, e.g. "C27-30 (2)", "Room TV", "MacBook"
+    var note: String            // User-editable context/history note, e.g. "Main Desk", "In separate room", "On Studio A Mac"
+    var icon: String            // "display", "tv.fill", "laptopcomputer"
+    var ignoredInSpace: Bool    // If true, hide from preset chips in this space (e.g. laptop in separate room)
 }
 
 struct DisplayPreset: Identifiable, Codable, Equatable {
@@ -69,189 +70,80 @@ struct DisplayPreset: Identifiable, Codable, Equatable {
 
 struct MachineFolder: Identifiable, Codable, Equatable {
     var id: String
-    var name: String           // e.g. "84-101", "84-102", "84-105"
-    var description: String    // e.g. "3 monitors: C27-30 + MacBook + Blackmagic"
-    var signatureUUIDs: [String] // Screen UUIDs that auto-identify this room/machine
-    var displayAliases: [String: String] // UUID -> friendly name
+    var name: String
+    var description: String
+    var signatureUUIDs: [String]
+    var displayAliases: [String: String]
+    var monitors: [MonitorRecord]?
     var presets: [DisplayPreset]
+
+    var resolvedMonitors: [MonitorRecord] {
+        if let m = monitors, !m.isEmpty {
+            return m
+        }
+        return displayAliases.sorted(by: { $0.value < $1.value }).map { (uuid, alias) in
+            let lower = alias.lowercased()
+            let icon = lower.contains("macbook") || lower.contains("laptop")
+                ? "laptopcomputer"
+                : (lower.contains("tv") || lower.contains("blackmagic") || lower.contains("extron") || lower.contains("broadcast") ? "tv.fill" : "display")
+            return MonitorRecord(id: uuid, label: alias, note: "", icon: icon, ignoredInSpace: false)
+        }
+    }
 }
 
 struct PresetsRoot: Codable, Equatable {
-    var version: Int = 1
+    var version: Int = 3
     var selectedFolderID: String
     var lastAppliedPresetID: String?
     var folders: [MachineFolder]
 }
 
-// MARK: - Default Seed Data (84-101, 84-102, 84-105)
+// MARK: - Default Seed Data (General User / New Machine vs Stowed Config)
 
 enum SeedData {
-    // 84-101 Display UUIDs (verified live from this machine)
-    static let c27UUID = "62965DD7-A85F-4301-AAAF-57ACDD304B01"      // Lenovo C27-30 (2) (27" Desk Main Monitor, 75Hz)
-    static let c27StudioAUUID = "STUDIO-A-C27-30-1"                  // Lenovo C27-30 (1) (Studio A Mac Desk Monitor)
-    static let mbpUUID = "37D8832A-2D66-02CA-B9F7-8F30A301B230"      // MacBook Pro 16" Built-in Liquid Retina XDR
-    static let bmdUUID = "9D513093-8CA9-4BEB-9D4E-B22ABE9D9996"      // Blackmagic (84-101 Room TV, 60Hz)
+    static let mbpUUID = "37D8832A-2D66-02CA-B9F7-8F30A301B230"
 
-    // 84-102 Display UUIDs (from ~/.config/displayplacer/presets.conf & 20-display.zsh)
-    static let ls32UUID = "3EC6A2A1-980C-4833-9DFB-1C7E6DB86474"     // Samsung 32" External
-    static let extronUUID = "59881A55-35CB-4FF8-A3E4-1477F91FC986"   // ExtronScalerD Classroom TV / Projector
-    static let r102MonAUUID = "862BBDA6-F3BA-44EF-89C9-1B04C8BF492F" // 84-102 Room TV
-    static let r102MonBUUID = "7E9A1BE6-39AD-4C09-9E9D-EE8D44400E05" // 84-102 Desk Monitor
-
-    static func defaultRoot() -> PresetsRoot {
-        let folder101 = MachineFolder(
-            id: "84-101",
-            name: "84-101",
-            description: "Studio A · C27-30 (2) Desk + Room TV (Blackmagic) + MacBook (C27-30 (1) on Studio A Mac)",
-            signatureUUIDs: [c27UUID, bmdUUID],
-            displayAliases: [
-                c27UUID: "C27-30 (2)",
-                c27StudioAUUID: "C27-30 (1) · Studio A Mac",
-                mbpUUID: "MacBook",
-                bmdUUID: "TV (Blackmagic)",
-            ],
-            presets: [
-                DisplayPreset(
-                    id: "101-mirror-all-3",
-                    name: "All 3 Mirrored to TV",
-                    subtitle: "C27-30 (2) + MacBook + Room TV all show the same 1080p screen",
-                    icon: "rectangle.on.rectangle.circle.fill",
-                    command: #"displayplacer "id:\#(c27UUID)+\#(mbpUUID)+\#(bmdUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "101-broadcast-c27-extend-mbp",
-                    name: "C27-30 (2) on TV · MacBook Extended",
-                    subtitle: "C27-30 (2) mirrored to Room TV; MacBook extended right",
-                    icon: "tv.and.mediabox",
-                    command: #"displayplacer "id:\#(c27UUID)+\#(bmdUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "101-broadcast-mbp-extend-c27",
-                    name: "MacBook on TV · C27-30 (2) Extended",
-                    subtitle: "MacBook mirrored to Room TV; C27-30 (2) extended left",
-                    icon: "laptopcomputer.and.ipad",
-                    command: #"displayplacer "id:\#(mbpUUID)+\#(bmdUUID) res:1920x1080 hz:120 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(-1920,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "101-desk-mirror-extend-bmd",
-                    name: "C27-30 (2) + MacBook Mirrored · TV Extended",
-                    subtitle: "C27-30 (2) + MacBook mirrored on desk; Room TV extended right",
-                    icon: "rectangle.split.2x1.fill",
-                    command: #"displayplacer "id:\#(c27UUID)+\#(mbpUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(bmdUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "101-extend-all-3",
-                    name: "All 3 Extended (3 Separate Desktops)",
-                    subtitle: "MacBook (Left) · C27-30 (2) (Main) · Room TV (Right)",
-                    icon: "rectangle.split.3x1.fill",
-                    command: #"displayplacer "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(-1728,0) degree:0" "id:\#(bmdUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "101-off-air-privacy",
-                    name: "TV Off · C27-30 (2) + MacBook Extended",
-                    subtitle: "Room TV off; C27-30 (2) Main + MacBook extended right",
-                    icon: "eye.slash.fill",
-                    command: #"displayplacer "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0" "id:\#(bmdUUID) enabled:false""#
-                ),
-            ]
-        )
-
-        let folder102 = MachineFolder(
-            id: "84-102",
-            name: "84-102",
-            description: "Lab 84-102 · Desk Monitor + Extron Room TV + MacBook",
-            signatureUUIDs: [ls32UUID, extronUUID, r102MonAUUID, r102MonBUUID],
-            displayAliases: [
-                ls32UUID: "32\" Desk",
-                extronUUID: "TV (Extron)",
-                r102MonAUUID: "TV (84-102)",
-                r102MonBUUID: "Desk Monitor",
-                mbpUUID: "MacBook",
-            ],
-            presets: [
-                DisplayPreset(
-                    id: "102-mirror-broadcast-extend-desk",
-                    name: "MacBook on TV · Desk Extended",
-                    subtitle: "Mirrors MacBook to 84-102 TV; Desk Monitor extended right",
-                    icon: "tv.and.mediabox",
-                    command: #"displayplacer "id:\#(r102MonAUUID)+\#(mbpUUID) res:1920x1080 hz:30 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0" "id:\#(r102MonBUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "102-side-by-side",
-                    name: "All 3 Extended (32\" Desk + MacBook + Extron TV)",
-                    subtitle: "Extended across 32\" Desk, MacBook, and Extron TV",
-                    icon: "rectangle.split.3x1.fill",
-                    command: #"displayplacer "id:\#(ls32UUID) res:1920x1080 hz:30 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0" "id:\#(mbpUUID) res:1920x1080 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0" "id:\#(extronUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:on origin:(3840,0) degree:0""#
-                ),
-                DisplayPreset(
-                    id: "102-dynamic-mirror-all",
-                    name: "All Mirrored to TV",
-                    subtitle: "Mirrors all connected monitors in 84-102",
-                    icon: "rectangle.on.rectangle.circle.fill",
-                    command: "@dynamic:mirror_all"
-                ),
-                DisplayPreset(
-                    id: "102-dynamic-extend-all",
-                    name: "All Extended Side-by-Side",
-                    subtitle: "Separate desktops across all connected monitors",
-                    icon: "squares.leading.rectangle",
-                    command: "@dynamic:extend_all"
-                ),
-                DisplayPreset(
-                    id: "102-laptop-only",
-                    name: "TV Off · MacBook Only",
-                    subtitle: "External displays off; MacBook only",
-                    icon: "laptopcomputer",
-                    command: "@dynamic:laptop_only"
-                ),
-            ]
-        )
-
-        let folder105 = MachineFolder(
-            id: "84-105",
-            name: "84-105",
-            description: "Lab 84-105 · Room TV + MacBook",
+    /// When a brand-new user or single-room desktop (like Studio A Mac without dotfiles)
+    /// launches the app with no ~/.config/displays/presets.json, create a clean single-space
+    /// setup based on the machine's actual hostname and connected displays.
+    static func defaultRootForNewMachine() -> PresetsRoot {
+        let host = Host.current().localizedName ?? "This Mac"
+        let defaultFolder = MachineFolder(
+            id: "default-space",
+            name: host,
+            description: "Default display presets for \(host) (click ✎ to edit description or monitors)",
             signatureUUIDs: [],
-            displayAliases: [
-                mbpUUID: "MacBook",
-            ],
+            displayAliases: [:],
+            monitors: [],
             presets: [
                 DisplayPreset(
-                    id: "105-mirror-all",
-                    name: "MacBook Mirrored to TV",
-                    subtitle: "MacBook and 84-105 Room TV show the same 1080p screen",
+                    id: "default-mirror-all",
+                    name: "Mirror All Displays",
+                    subtitle: "All connected monitors show the same screen",
                     icon: "rectangle.on.rectangle.circle.fill",
                     command: "@dynamic:mirror_all"
                 ),
                 DisplayPreset(
-                    id: "105-extend-all",
-                    name: "MacBook Main · TV Extended Right",
-                    subtitle: "MacBook as Main; 84-105 TV extended right",
-                    icon: "rectangle.split.2x1.fill",
+                    id: "default-extend-all",
+                    name: "Extend All Displays Side-by-Side",
+                    subtitle: "Each connected monitor is a separate extended desktop",
+                    icon: "rectangle.split.3x1.fill",
                     command: "@dynamic:extend_all"
                 ),
                 DisplayPreset(
-                    id: "105-broadcast-external-extend-mbp",
-                    name: "TV Main · MacBook Extended Right",
-                    subtitle: "84-105 TV as Main; MacBook extended right",
-                    icon: "tv.and.mediabox",
-                    command: "@dynamic:broadcast_main_extend_builtin"
-                ),
-                DisplayPreset(
-                    id: "105-laptop-only",
-                    name: "TV Off · MacBook Only",
-                    subtitle: "Mutes 84-105 Room TV; MacBook stays on",
+                    id: "default-primary-only",
+                    name: "Primary Display Only (Mute Secondary Screens)",
+                    subtitle: "Turns off secondary/TV displays for privacy",
                     icon: "eye.slash.fill",
                     command: "@dynamic:laptop_only"
                 ),
             ]
         )
-
         return PresetsRoot(
-            version: 2,
-            selectedFolderID: "84-101",
+            version: 3,
+            selectedFolderID: defaultFolder.id,
             lastAppliedPresetID: nil,
-            folders: [folder101, folder102, folder105]
+            folders: [defaultFolder]
         )
     }
 }
@@ -281,11 +173,10 @@ final class DisplayStore: ObservableObject {
     static func loadOrSeed() -> PresetsRoot {
         if let data = try? Data(contentsOf: configFile),
            let decoded = try? JSONDecoder().decode(PresetsRoot.self, from: data),
-           !decoded.folders.isEmpty,
-           decoded.version >= 2 {
+           !decoded.folders.isEmpty {
             return decoded
         }
-        let seeded = SeedData.defaultRoot()
+        let seeded = SeedData.defaultRootForNewMachine()
         saveRoot(seeded)
         return seeded
     }
@@ -303,8 +194,13 @@ final class DisplayStore: ObservableObject {
         DisplayStore.saveRoot(root)
     }
 
+    var selectedFolderIndex: Int? {
+        root.folders.firstIndex(where: { $0.id == root.selectedFolderID }) ?? (root.folders.isEmpty ? nil : 0)
+    }
+
     var selectedFolder: MachineFolder? {
-        root.folders.first(where: { $0.id == root.selectedFolderID }) ?? root.folders.first
+        guard let idx = selectedFolderIndex else { return nil }
+        return root.folders[idx]
     }
 
     // MARK: - Inspect Live Screens
@@ -379,7 +275,7 @@ final class DisplayStore: ObservableObject {
             let mirrorMaster = CGDisplayMirrorsDisplay(currentCGID)
             let spName = namesByCGID[currentCGID]
             let alias = aliases[currentUUID]
-            let displayName = spName ?? alias ?? (isBuiltIn ? "MacBook Pro" : currentType)
+            let displayName = alias ?? spName ?? (isBuiltIn ? "MacBook Pro" : currentType)
             displays.append(ConnectedDisplay(
                 id: currentUUID,
                 cgID: currentCGID,
@@ -436,6 +332,7 @@ final class DisplayStore: ObservableObject {
         var allAliases: [String: String] = [:]
         for f in root.folders {
             for (k, v) in f.displayAliases { allAliases[k] = v }
+            for m in f.resolvedMonitors { allAliases[m.id] = m.label }
         }
         Task {
             let result = await Task.detached { () -> ([ConnectedDisplay], String) in
@@ -447,7 +344,6 @@ final class DisplayStore: ObservableObject {
             self.connected = list
             self.currentCommand = cmd
 
-            // Sync roleDraft for connected displays
             var newRoles: [String: DisplayRole] = [:]
             let mainDisp = list.first(where: { $0.isMain }) ?? list.first
             for d in list {
@@ -463,7 +359,7 @@ final class DisplayStore: ObservableObject {
             }
             self.roleDraft = newRoles
 
-            // Auto-detect folder by matching connected UUIDs against folder signatureUUIDs
+            // Auto-detect folder by matching connected external UUIDs against folder signatureUUIDs
             let connectedSet = Set(list.map(\.id))
             var bestFolder: String? = nil
             var bestScore = 0
@@ -480,6 +376,30 @@ final class DisplayStore: ObservableObject {
                 self.save()
             } else {
                 self.detectedFolderID = bestFolder
+            }
+
+            // Auto-record any newly connected monitor into the active/detected space's monitor history
+            if let targetID = bestFolder ?? (self.root.folders.count == 1 ? self.root.folders.first?.id : nil),
+               let fIdx = self.root.folders.firstIndex(where: { $0.id == targetID }) {
+                var mons = self.root.folders[fIdx].resolvedMonitors
+                var changed = false
+                for d in list {
+                    if !mons.contains(where: { $0.id == d.id }) {
+                        let icon = d.isBuiltIn ? "laptopcomputer" : (d.name.localizedCaseInsensitiveContains("TV") || d.name.localizedCaseInsensitiveContains("Blackmagic") ? "tv.fill" : "display")
+                        mons.append(MonitorRecord(
+                            id: d.id,
+                            label: d.name,
+                            note: d.isBuiltIn ? "Built-in" : "\(d.resolution) @ \(d.hz)Hz",
+                            icon: icon,
+                            ignoredInSpace: false
+                        ))
+                        changed = true
+                    }
+                }
+                if changed {
+                    self.root.folders[fIdx].monitors = mons
+                    self.save()
+                }
             }
         }
     }
@@ -530,8 +450,10 @@ final class DisplayStore: ObservableObject {
             var parts: [String] = []
             if let mbp = builtIn {
                 parts.append(#""id:\#(mbp.id) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0""#)
+            } else if let firstExt = externals.first {
+                parts.append(#""id:\#(firstExt.id) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
             }
-            for ext in externals {
+            for ext in (builtIn != nil ? externals : Array(externals.dropFirst())) {
                 parts.append(#""id:\#(ext.id) enabled:false""#)
             }
             return "displayplacer " + parts.joined(separator: " ")
@@ -553,8 +475,6 @@ final class DisplayStore: ObservableObject {
         let offs = connected.filter { roleDraft[$0.id] == .off && $0.id != mainDisplay.id }
 
         var args: [String] = []
-
-        // 1. Main + Mirror group at origin (0,0)
         let mainGroupIDs = ([mainDisplay.id] + mirrors.map(\.id)).joined(separator: "+")
         if !mirrors.isEmpty {
             args.append(#""id:\#(mainGroupIDs) res:1920x1080 enabled:true scaling:off origin:(0,0) degree:0""#)
@@ -564,7 +484,6 @@ final class DisplayStore: ObservableObject {
             args.append(#""id:\#(mainDisplay.id) res:\#(res) enabled:true scaling:\#(scale) origin:(0,0) degree:0""#)
         }
 
-        // 2. Extend Left displays
         var leftX = 0
         for d in lefts {
             let w = d.isBuiltIn ? 1728 : 1920
@@ -574,7 +493,6 @@ final class DisplayStore: ObservableObject {
             args.append(#""id:\#(d.id) res:\#(res) enabled:true scaling:\#(scale) origin:(\#(leftX),0) degree:0""#)
         }
 
-        // 3. Extend Right displays
         var rightX = (!mirrors.isEmpty || !mainDisplay.isBuiltIn) ? 1920 : 1728
         for d in rights {
             let w = d.isBuiltIn ? 1728 : 1920
@@ -584,7 +502,6 @@ final class DisplayStore: ObservableObject {
             rightX += w
         }
 
-        // 4. Disabled displays
         for d in offs {
             args.append(#""id:\#(d.id) enabled:false""#)
         }
@@ -628,7 +545,7 @@ final class DisplayStore: ObservableObject {
         }
     }
 
-    // MARK: - Folder & Preset CRUD
+    // MARK: - Space, Monitor History & Preset CRUD
 
     func addFolder(name: String, description: String) {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -636,18 +553,47 @@ final class DisplayStore: ObservableObject {
         let id = clean.lowercased().replacingOccurrences(of: " ", with: "-") + "-\(Int(Date().timeIntervalSince1970) % 10000)"
         let sig = connected.filter { !$0.isBuiltIn }.map(\.id)
         var aliases: [String: String] = [:]
-        for d in connected { aliases[d.id] = d.name }
+        var mons: [MonitorRecord] = []
+        for d in connected {
+            aliases[d.id] = d.name
+            mons.append(MonitorRecord(
+                id: d.id,
+                label: d.name,
+                note: d.isBuiltIn ? "Built-in" : "\(d.resolution) @ \(d.hz)Hz",
+                icon: d.isBuiltIn ? "laptopcomputer" : "display",
+                ignoredInSpace: false
+            ))
+        }
         let newFolder = MachineFolder(
             id: id,
             name: clean,
-            description: description.isEmpty ? "\(connected.count) displays" : description,
+            description: description.isEmpty ? "Monitors & presets for \(clean)" : description,
             signatureUUIDs: sig,
             displayAliases: aliases,
+            monitors: mons,
             presets: []
         )
         root.folders.append(newFolder)
         root.selectedFolderID = id
         save()
+    }
+
+    func updateFolder(id: String, name: String, description: String) {
+        guard let idx = root.folders.firstIndex(where: { $0.id == id }) else { return }
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanName.isEmpty {
+            root.folders[idx].name = cleanName
+        }
+        root.folders[idx].description = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        save()
+    }
+
+    func keepOnlyFolder(id: String) {
+        guard let target = root.folders.first(where: { $0.id == id }) else { return }
+        root.folders = [target]
+        root.selectedFolderID = target.id
+        save()
+        statusMessage = "Single-space mode: kept only '\(target.name)'"
     }
 
     func deleteFolder(id: String) {
@@ -658,6 +604,28 @@ final class DisplayStore: ObservableObject {
         save()
     }
 
+    func upsertMonitor(inFolder folderID: String, record: MonitorRecord) {
+        guard let idx = root.folders.firstIndex(where: { $0.id == folderID }) else { return }
+        var mons = root.folders[idx].resolvedMonitors
+        if let mIdx = mons.firstIndex(where: { $0.id == record.id }) {
+            mons[mIdx] = record
+        } else {
+            mons.append(record)
+        }
+        root.folders[idx].monitors = mons
+        root.folders[idx].displayAliases[record.id] = record.label
+        save()
+    }
+
+    func deleteMonitor(inFolder folderID: String, monitorID: String) {
+        guard let idx = root.folders.firstIndex(where: { $0.id == folderID }) else { return }
+        var mons = root.folders[idx].resolvedMonitors
+        mons.removeAll { $0.id == monitorID }
+        root.folders[idx].monitors = mons
+        root.folders[idx].displayAliases.removeValue(forKey: monitorID)
+        save()
+    }
+
     func saveNewPreset(inFolder folderID: String, name: String, subtitle: String, command: String) {
         guard let idx = root.folders.firstIndex(where: { $0.id == folderID }) else { return }
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -665,19 +633,24 @@ final class DisplayStore: ObservableObject {
         let preset = DisplayPreset(
             id: "\(folderID)-\(Int(Date().timeIntervalSince1970))",
             name: cleanName,
-            subtitle: subtitle.isEmpty ? "Saved display arrangement" : subtitle,
+            subtitle: subtitle.isEmpty ? "Custom display preset" : subtitle,
             icon: command.contains("+") ? "rectangle.on.rectangle.circle.fill" : "rectangle.split.3x1.fill",
             command: command
         )
         root.folders[idx].presets.append(preset)
-        for d in connected where !d.isBuiltIn {
-            if !root.folders[idx].signatureUUIDs.contains(d.id) {
-                root.folders[idx].signatureUUIDs.append(d.id)
-            }
-            root.folders[idx].displayAliases[d.id] = d.name
-        }
         save()
         statusMessage = "Saved '\(cleanName)' to \(root.folders[idx].name)"
+    }
+
+    func updatePreset(folderID: String, presetID: String, name: String, subtitle: String, icon: String, command: String) {
+        guard let fIdx = root.folders.firstIndex(where: { $0.id == folderID }),
+              let pIdx = root.folders[fIdx].presets.firstIndex(where: { $0.id == presetID }) else { return }
+        root.folders[fIdx].presets[pIdx].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        root.folders[fIdx].presets[pIdx].subtitle = subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        root.folders[fIdx].presets[pIdx].icon = icon
+        root.folders[fIdx].presets[pIdx].command = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        save()
+        statusMessage = "Updated preset '\(name)'"
     }
 
     func overwritePresetWithCurrent(folderID: String, presetID: String) {
@@ -686,7 +659,7 @@ final class DisplayStore: ObservableObject {
               let pIdx = root.folders[fIdx].presets.firstIndex(where: { $0.id == presetID }) else { return }
         root.folders[fIdx].presets[pIdx].command = currentCommand
         save()
-        statusMessage = "Updated '\(root.folders[fIdx].presets[pIdx].name)' with current display layout"
+        statusMessage = "Updated '\(root.folders[fIdx].presets[pIdx].name)' with current layout"
     }
 
     func movePreset(fromFolderID: String, presetID: String, toFolderID: String) {
@@ -706,6 +679,142 @@ final class DisplayStore: ObservableObject {
     }
 }
 
+// MARK: - Monitor Badge Resolution
+
+struct PresetMonitorBadge: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let icon: String
+    let roleLabel: String
+    let roleColor: Color
+}
+
+extension DisplayStore {
+    func monitorRecord(for uuid: String, in folder: MachineFolder) -> MonitorRecord {
+        if let rec = folder.resolvedMonitors.first(where: { $0.id == uuid }) {
+            return rec
+        }
+        let raw = folder.displayAliases[uuid]
+            ?? connected.first(where: { $0.id == uuid })?.name
+            ?? (uuid == SeedData.mbpUUID ? "MacBook" : "Monitor")
+        let lower = raw.lowercased()
+        let icon: String
+        if lower.contains("macbook") || lower.contains("laptop") || uuid == SeedData.mbpUUID {
+            icon = "laptopcomputer"
+        } else if lower.contains("tv") || lower.contains("blackmagic") || lower.contains("extron") || lower.contains("broadcast") || lower.contains("proj") {
+            icon = "tv.fill"
+        } else {
+            icon = "display"
+        }
+        return MonitorRecord(id: uuid, label: raw, note: "", icon: icon, ignoredInSpace: false)
+    }
+
+    func monitorBadges(for preset: DisplayPreset, in folder: MachineFolder) -> [PresetMonitorBadge] {
+        let cmd = preset.command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visibleMons = folder.resolvedMonitors.filter { !$0.ignoredInSpace }
+
+        if cmd.hasPrefix("@dynamic:") {
+            let mode = cmd.replacingOccurrences(of: "@dynamic:", with: "")
+            let firstLabel = visibleMons.first?.label ?? "Primary"
+            let firstIcon = visibleMons.first?.icon ?? "laptopcomputer"
+            let secondLabel = visibleMons.dropFirst().first?.label ?? "Room TV"
+            let secondIcon = visibleMons.dropFirst().first?.icon ?? "tv.fill"
+            switch mode {
+            case "mirror_all":
+                return [
+                    PresetMonitorBadge(id: "dyn-1", name: firstLabel, icon: firstIcon, roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-2", name: secondLabel, icon: secondIcon, roleLabel: "MIRROR", roleColor: .green),
+                ]
+            case "extend_all":
+                return [
+                    PresetMonitorBadge(id: "dyn-1", name: firstLabel, icon: firstIcon, roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-2", name: secondLabel, icon: secondIcon, roleLabel: "EXTEND", roleColor: .purple),
+                ]
+            case "broadcast_main_extend_builtin":
+                return [
+                    PresetMonitorBadge(id: "dyn-2", name: secondLabel, icon: secondIcon, roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-1", name: firstLabel, icon: firstIcon, roleLabel: "EXTEND", roleColor: .purple),
+                ]
+            case "laptop_only":
+                return [
+                    PresetMonitorBadge(id: "dyn-1", name: firstLabel, icon: firstIcon, roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-2", name: secondLabel, icon: secondIcon, roleLabel: "OFF", roleColor: .secondary),
+                ]
+            default:
+                return []
+            }
+        }
+
+        var badges: [PresetMonitorBadge] = []
+        let pattern = #""([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsRange = NSRange(cmd.startIndex..<cmd.endIndex, in: cmd)
+        let matches = regex.matches(in: cmd, range: nsRange)
+
+        for (segIdx, m) in matches.enumerated() {
+            guard let r = Range(m.range(at: 1), in: cmd) else { continue }
+            let seg = String(cmd[r])
+            var idPart = ""
+            var originX = 0
+            var isOff = seg.localizedCaseInsensitiveContains("enabled:false")
+
+            for tok in seg.split(separator: " ") {
+                let s = String(tok)
+                if s.hasPrefix("id:") {
+                    idPart = s.replacingOccurrences(of: "id:", with: "")
+                } else if s.hasPrefix("origin:(") {
+                    let coords = s.replacingOccurrences(of: "origin:(", with: "").replacingOccurrences(of: ")", with: "")
+                    if let firstNum = coords.split(separator: ",").first, let xVal = Int(firstNum) {
+                        originX = xVal
+                    }
+                } else if s == "enabled:false" {
+                    isOff = true
+                }
+            }
+
+            let rawUUIDs = idPart.split(separator: "+").map(String.init)
+            // Filter out monitors marked ignoredInSpace (e.g. MacBook in a separate room in 84-101)
+            let visibleUUIDs = rawUUIDs.filter { !monitorRecord(for: $0, in: folder).ignoredInSpace }
+            let isMainGroup = !isOff && (originX == 0 && segIdx == 0)
+
+            for (uIdx, uuid) in visibleUUIDs.enumerated() {
+                let rec = monitorRecord(for: uuid, in: folder)
+                let roleLabel: String
+                let roleColor: Color
+                if isOff {
+                    roleLabel = "OFF"
+                    roleColor = .secondary
+                } else if isMainGroup {
+                    if uIdx == 0 {
+                        roleLabel = "MAIN"
+                        roleColor = .blue
+                    } else {
+                        roleLabel = "MIRROR"
+                        roleColor = .green
+                    }
+                } else if visibleUUIDs.count > 1 && uIdx > 0 {
+                    roleLabel = "MIRROR"
+                    roleColor = .green
+                } else if originX < 0 {
+                    roleLabel = "EXT LEFT"
+                    roleColor = .purple
+                } else {
+                    roleLabel = "EXTEND"
+                    roleColor = .purple
+                }
+                badges.append(PresetMonitorBadge(
+                    id: "\(preset.id)-\(uuid)-\(segIdx)-\(uIdx)",
+                    name: rec.label,
+                    icon: rec.icon,
+                    roleLabel: roleLabel,
+                    roleColor: roleColor
+                ))
+            }
+        }
+        return badges
+    }
+}
+
 // MARK: - Views
 
 struct ConnectedDisplaysCard: View {
@@ -718,7 +827,7 @@ struct ConnectedDisplaysCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("CONNECTED MONITORS (\(store.connected.count))", systemImage: "display.2")
+                Label("CONNECTED TO THIS MAC (\(store.connected.count))", systemImage: "display.2")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -726,7 +835,7 @@ struct ConnectedDisplaysCard: View {
                    let f = store.root.folders.first(where: { $0.id == detected }) {
                     HStack(spacing: 4) {
                         Circle().fill(Color.green).frame(width: 6, height: 6)
-                        Text("Room \(f.name)")
+                        Text("Detected: \(f.name)")
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .padding(.horizontal, 7)
@@ -751,7 +860,7 @@ struct ConnectedDisplaysCard: View {
             } else {
                 ForEach(store.connected) { d in
                     HStack(spacing: 8) {
-                        Image(systemName: d.isBuiltIn ? "laptopcomputer" : (d.name.localizedCaseInsensitiveContains("Blackmagic") ? "tv.and.mediabox" : "display"))
+                        Image(systemName: d.isBuiltIn ? "laptopcomputer" : (d.name.localizedCaseInsensitiveContains("TV") || d.name.localizedCaseInsensitiveContains("Blackmagic") ? "tv.fill" : "display"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(d.isMain ? .blue : .primary)
                             .frame(width: 20)
@@ -801,7 +910,7 @@ struct ConnectedDisplaysCard: View {
                         }
                         .labelsHidden()
                         .controlSize(.small)
-                        .frame(width: 165)
+                        .frame(width: 155)
                     }
                     .padding(.vertical, 2)
                 }
@@ -861,6 +970,406 @@ struct ConnectedDisplaysCard: View {
     }
 }
 
+struct RoomHardwareStripView: View {
+    let folder: MachineFolder
+    @ObservedObject var store: DisplayStore
+    @State private var editingMonitor: MonitorRecord? = nil
+    @State private var showingAddMonitor = false
+
+    var body: some View {
+        let connectedIDs = Set(store.connected.map(\.id))
+        let monitors = folder.resolvedMonitors
+
+        VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("MONITORS IN SPACE:")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    ForEach(monitors) { item in
+                        let isConn = connectedIDs.contains(item.id)
+                        Button {
+                            editingMonitor = item
+                        } label: {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(isConn ? Color.green : Color.secondary.opacity(0.4))
+                                    .frame(width: 5.5, height: 5.5)
+                                Image(systemName: item.ignoredInSpace ? "eye.slash" : item.icon)
+                                    .font(.system(size: 9.5, weight: .semibold))
+                                    .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
+                                Text(item.label)
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .lineLimit(1)
+                                    .foregroundStyle(item.ignoredInSpace ? .secondary : (isConn ? .primary : .secondary))
+                                if !item.note.isEmpty {
+                                    Text("· \(item.note)")
+                                        .font(.system(size: 9.5))
+                                        .lineLimit(1)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if item.ignoredInSpace {
+                                    Text("HIDDEN")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .padding(.horizontal, 3.5)
+                                        .padding(.vertical, 0.5)
+                                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.2)))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(isConn && !item.ignoredInSpace ? Color.green.opacity(0.08) : Color.primary.opacity(0.04))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(isConn && !item.ignoredInSpace ? Color.green.opacity(0.28) : Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Click to edit '\(item.label)' name, history note, or hide/show in presets")
+                    }
+
+                    Button {
+                        showingAddMonitor = true
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("Monitor")
+                                .font(.system(size: 9.5, weight: .medium))
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3.5)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.04)))
+                        .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add a monitor note to this space's history (e.g. a monitor connected to another machine in the room)")
+                }
+            }
+        }
+        .sheet(item: $editingMonitor) { mon in
+            EditMonitorSheet(folderID: folder.id, monitor: mon, isNew: false, store: store)
+        }
+        .sheet(isPresented: $showingAddMonitor) {
+            EditMonitorSheet(
+                folderID: folder.id,
+                monitor: MonitorRecord(
+                    id: "custom-\(Int(Date().timeIntervalSince1970))",
+                    label: "",
+                    note: "",
+                    icon: "display",
+                    ignoredInSpace: false
+                ),
+                isNew: true,
+                store: store
+            )
+        }
+    }
+}
+
+struct EditMonitorSheet: View {
+    let folderID: String
+    @State var monitor: MonitorRecord
+    let isNew: Bool
+    @ObservedObject var store: DisplayStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(isNew ? "Add Monitor to Space History" : "Edit Monitor in Space")
+                .font(.headline)
+
+            TextField("Monitor Name (e.g. C27-30 Desk, Room TV, C27-30 #1)", text: $monitor.label)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Location / History Note (e.g. Main Desk, On Studio A Mac, In separate room)", text: $monitor.note)
+                .textFieldStyle(.roundedBorder)
+
+            Picker("Monitor Icon", selection: $monitor.icon) {
+                Label("Monitor (Desk Display)", systemImage: "display").tag("display")
+                Label("TV / Broadcast / Projector", systemImage: "tv.fill").tag("tv.fill")
+                Label("Laptop Built-in Screen", systemImage: "laptopcomputer").tag("laptopcomputer")
+            }
+
+            Toggle("Hide this screen from preset badges in this space (e.g. closed laptop in another room)", isOn: $monitor.ignoredInSpace)
+                .font(.system(size: 12))
+
+            if !isNew {
+                Text("Screen ID: \(monitor.id)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                if !isNew {
+                    Button("Delete Monitor", role: .destructive) {
+                        store.deleteMonitor(inFolder: folderID, monitorID: monitor.id)
+                        dismiss()
+                    }
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save") {
+                    store.upsertMonitor(inFolder: folderID, record: monitor)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(monitor.label.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 440)
+    }
+}
+
+struct PresetRowView: View {
+    let folder: MachineFolder
+    let preset: DisplayPreset
+    @ObservedObject var store: DisplayStore
+    @State private var showingEditPreset = false
+
+    var isActive: Bool {
+        if !store.currentCommand.isEmpty && store.currentCommand == preset.command {
+            return true
+        }
+        guard store.root.lastAppliedPresetID == preset.id else { return false }
+        if preset.command == "@dynamic:laptop_only" && store.connected.count == 1 {
+            return true
+        }
+        return store.detectedFolderID == folder.id
+    }
+
+    var body: some View {
+        let badges = store.monitorBadges(for: preset, in: folder)
+        HStack(spacing: 10) {
+            Button {
+                store.applyPreset(preset)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: preset.icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isActive ? .green : .accentColor)
+                        .frame(width: 22)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(preset.name)
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            if isActive {
+                                Text("ACTIVE")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Capsule().fill(Color.green.opacity(0.2)))
+                                    .foregroundStyle(.green)
+                            }
+                        }
+
+                        if !preset.subtitle.isEmpty {
+                            Text(preset.subtitle)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        if !badges.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 5) {
+                                    ForEach(badges) { b in
+                                        HStack(spacing: 4) {
+                                            Image(systemName: b.icon)
+                                                .font(.system(size: 9.5, weight: .semibold))
+                                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                                            Text(b.name)
+                                                .font(.system(size: 10.5, weight: .medium))
+                                                .lineLimit(1)
+                                                .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                                            Text(b.roleLabel)
+                                                .font(.system(size: 8.5, weight: .bold))
+                                                .lineLimit(1)
+                                                .padding(.horizontal, 4.5)
+                                                .padding(.vertical, 1)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 3)
+                                                        .fill(b.roleColor.opacity(0.18))
+                                                )
+                                                .foregroundStyle(b.roleColor)
+                                        }
+                                        .fixedSize(horizontal: true, vertical: false)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 5)
+                                                .fill(Color.primary.opacity(0.05))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showingEditPreset = true
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Edit preset name, description text, or layout command")
+
+            Button("Apply") {
+                store.applyPreset(preset)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(store.busy)
+
+            Menu {
+                Button("Apply Preset") {
+                    store.applyPreset(preset)
+                }
+                Button("Edit Name & Description…") {
+                    showingEditPreset = true
+                }
+                Button("Overwrite with Current Screen Layout") {
+                    store.overwritePresetWithCurrent(folderID: folder.id, presetID: preset.id)
+                }
+                Button("Copy displayplacer Command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(store.resolveCommand(preset.command), forType: .string)
+                    store.statusMessage = "Copied command to clipboard"
+                }
+                if store.root.folders.count > 1 {
+                    Divider()
+                    Menu("Move to Space") {
+                        ForEach(store.root.folders.filter { $0.id != folder.id }) { target in
+                            Button(target.name) {
+                                store.movePreset(fromFolderID: folder.id, presetID: preset.id, toFolderID: target.id)
+                            }
+                        }
+                    }
+                }
+                Divider()
+                Button("Delete Preset", role: .destructive) {
+                    store.deletePreset(folderID: folder.id, presetID: preset.id)
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 22)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(isActive ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(isActive ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .sheet(isPresented: $showingEditPreset) {
+            EditPresetSheet(folderID: folder.id, preset: preset, store: store)
+        }
+    }
+}
+
+struct EditPresetSheet: View {
+    let folderID: String
+    @State var preset: DisplayPreset
+    @ObservedObject var store: DisplayStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit Display Preset")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Preset Title")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Preset Title", text: $preset.name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Description Text (shown below title)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Plain-English description of what each monitor does", text: $preset.subtitle)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Picker("Icon", selection: $preset.icon) {
+                Label("Mirror All", systemImage: "rectangle.on.rectangle.circle.fill").tag("rectangle.on.rectangle.circle.fill")
+                Label("TV Broadcast", systemImage: "tv.and.mediabox").tag("tv.and.mediabox")
+                Label("2 Displays Split", systemImage: "rectangle.split.2x1.fill").tag("rectangle.split.2x1.fill")
+                Label("3 Displays Split", systemImage: "rectangle.split.3x1.fill").tag("rectangle.split.3x1.fill")
+                Label("Privacy / TV Off", systemImage: "eye.slash.fill").tag("eye.slash.fill")
+                Label("Laptop", systemImage: "laptopcomputer").tag("laptopcomputer")
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("displayplacer Command")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !store.currentCommand.isEmpty {
+                        Button("Replace with Current Screen Layout") {
+                            preset.command = store.currentCommand
+                        }
+                        .controlSize(.mini)
+                    }
+                }
+                TextField("displayplacer command", text: $preset.command)
+                    .font(.system(size: 10, design: .monospaced))
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save Changes") {
+                    store.updatePreset(
+                        folderID: folderID,
+                        presetID: preset.id,
+                        name: preset.name,
+                        subtitle: preset.subtitle,
+                        icon: preset.icon,
+                        command: preset.command
+                    )
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(preset.name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 460)
+    }
+}
+
 struct SavePresetSheet: View {
     @ObservedObject var store: DisplayStore
     let isDraft: Bool
@@ -871,19 +1380,21 @@ struct SavePresetSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(isDraft ? "Save Custom Roles to Folder" : "Snapshot Current Display Layout")
+            Text(isDraft ? "Save Custom Roles to Space" : "Snapshot Current Display Layout")
                 .font(.headline)
 
-            Picker("Machine Folder", selection: $targetFolderID) {
-                ForEach(store.root.folders) { f in
-                    Text(f.name).tag(f.id)
+            if store.root.folders.count > 1 {
+                Picker("Space / Room", selection: $targetFolderID) {
+                    ForEach(store.root.folders) { f in
+                        Text(f.name).tag(f.id)
+                    }
                 }
             }
 
-            TextField("Preset Name (e.g. Broadcast C27-30 + Private MacBook)", text: $presetName)
+            TextField("Preset Title (e.g. Mirror Desk + Room TV)", text: $presetName)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("Description / Subtitle (optional)", text: $presetSubtitle)
+            TextField("Description Text (e.g. C27-30 Desk mirrored to Room TV)", text: $presetSubtitle)
                 .textFieldStyle(.roundedBorder)
 
             let cmd = isDraft ? store.buildRoleDraftCommand() : store.currentCommand
@@ -912,344 +1423,66 @@ struct SavePresetSheet: View {
             }
         }
         .padding(16)
-        .frame(width: 420)
+        .frame(width: 440)
         .onAppear {
             targetFolderID = store.root.selectedFolderID
         }
     }
 }
 
-struct PresetMonitorBadge: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let icon: String
-    let roleLabel: String
-    let roleColor: Color
-}
-
-extension DisplayStore {
-    func shortDisplayInfo(for uuid: String, in folder: MachineFolder) -> (name: String, icon: String) {
-        let raw = folder.displayAliases[uuid]
-            ?? connected.first(where: { $0.id == uuid })?.name
-            ?? (uuid == SeedData.mbpUUID ? "MacBook" : "Display")
-        let lower = raw.lowercased()
-        let icon: String
-        if lower.contains("macbook") || lower.contains("laptop") || uuid == SeedData.mbpUUID {
-            icon = "laptopcomputer"
-        } else if lower.contains("tv") || lower.contains("blackmagic") || lower.contains("extron") || lower.contains("broadcast") || lower.contains("proj") {
-            icon = "tv.fill"
-        } else {
-            icon = "display"
-        }
-        return (raw, icon)
-    }
-
-    func monitorBadges(for preset: DisplayPreset, in folder: MachineFolder) -> [PresetMonitorBadge] {
-        let cmd = preset.command.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cmd.hasPrefix("@dynamic:") {
-            let mode = cmd.replacingOccurrences(of: "@dynamic:", with: "")
-            let tvName = folder.id == "84-102" ? "TV (Extron)" : "Room TV"
-            switch mode {
-            case "mirror_all":
-                return [
-                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
-                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "MIRROR", roleColor: .green),
-                ]
-            case "extend_all":
-                return [
-                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
-                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "EXTEND RIGHT", roleColor: .purple),
-                ]
-            case "broadcast_main_extend_builtin":
-                return [
-                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "MAIN", roleColor: .blue),
-                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "EXTEND RIGHT", roleColor: .purple),
-                ]
-            case "laptop_only":
-                return [
-                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
-                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "OFF", roleColor: .secondary),
-                ]
-            default:
-                return []
-            }
-        }
-
-        // Parse quoted segments in `displayplacer "..." "..."`
-        var badges: [PresetMonitorBadge] = []
-        let pattern = #""([^"]+)""#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let nsRange = NSRange(cmd.startIndex..<cmd.endIndex, in: cmd)
-        let matches = regex.matches(in: cmd, range: nsRange)
-
-        for (segIdx, m) in matches.enumerated() {
-            guard let r = Range(m.range(at: 1), in: cmd) else { continue }
-            let seg = String(cmd[r])
-            var idPart = ""
-            var originX = 0
-            var isOff = seg.localizedCaseInsensitiveContains("enabled:false")
-
-            for tok in seg.split(separator: " ") {
-                let s = String(tok)
-                if s.hasPrefix("id:") {
-                    idPart = s.replacingOccurrences(of: "id:", with: "")
-                } else if s.hasPrefix("origin:(") {
-                    let coords = s.replacingOccurrences(of: "origin:(", with: "").replacingOccurrences(of: ")", with: "")
-                    if let firstNum = coords.split(separator: ",").first, let xVal = Int(firstNum) {
-                        originX = xVal
-                    }
-                } else if s == "enabled:false" {
-                    isOff = true
-                }
-            }
-
-            let uuids = idPart.split(separator: "+").map(String.init)
-            let isMainGroup = !isOff && (originX == 0 && segIdx == 0)
-
-            for (uIdx, uuid) in uuids.enumerated() {
-                let info = shortDisplayInfo(for: uuid, in: folder)
-                let roleLabel: String
-                let roleColor: Color
-                if isOff {
-                    roleLabel = "OFF"
-                    roleColor = .secondary
-                } else if isMainGroup {
-                    if uIdx == 0 {
-                        roleLabel = "MAIN"
-                        roleColor = .blue
-                    } else {
-                        roleLabel = "MIRROR"
-                        roleColor = .green
-                    }
-                } else if uuids.count > 1 && uIdx > 0 {
-                    roleLabel = "MIRROR"
-                    roleColor = .green
-                } else if originX < 0 {
-                    roleLabel = "EXT LEFT"
-                    roleColor = .purple
-                } else {
-                    roleLabel = "EXT RIGHT"
-                    roleColor = .purple
-                }
-                badges.append(PresetMonitorBadge(
-                    id: "\(preset.id)-\(uuid)-\(segIdx)-\(uIdx)",
-                    name: info.name,
-                    icon: info.icon,
-                    roleLabel: roleLabel,
-                    roleColor: roleColor
-                ))
-            }
-        }
-        return badges
-    }
-
-    func roomMonitors(for folder: MachineFolder) -> [(uuid: String, name: String, icon: String, roleNote: String, isConnected: Bool)] {
-        let connectedIDs = Set(connected.map(\.id))
-        if folder.id == "84-101" {
-            return [
-                (SeedData.c27UUID, "C27-30 (2)", "display", "Main Desk", connectedIDs.contains(SeedData.c27UUID)),
-                (SeedData.bmdUUID, "TV (Blackmagic)", "tv.fill", "Room TV", connectedIDs.contains(SeedData.bmdUUID)),
-                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
-                (SeedData.c27StudioAUUID, "C27-30 (1)", "display", "Studio A Mac", connectedIDs.contains(SeedData.c27StudioAUUID)),
-            ]
-        } else if folder.id == "84-102" {
-            return [
-                (SeedData.ls32UUID, "32\" Desk", "display", "Desk", connectedIDs.contains(SeedData.ls32UUID) || connectedIDs.contains(SeedData.r102MonBUUID)),
-                (SeedData.extronUUID, "TV (Extron)", "tv.fill", "Room TV", connectedIDs.contains(SeedData.extronUUID) || connectedIDs.contains(SeedData.r102MonAUUID)),
-                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
-            ]
-        } else if folder.id == "84-105" {
-            let hasExt = connected.contains(where: { !$0.isBuiltIn })
-            return [
-                ("105-tv", "Room TV", "tv.fill", "84-105 TV", hasExt),
-                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
-            ]
-        } else {
-            return folder.displayAliases.sorted(by: { $0.value < $1.value }).map { (uuid, name) in
-                let info = shortDisplayInfo(for: uuid, in: folder)
-                return (uuid, info.name, info.icon, "", connectedIDs.contains(uuid))
-            }
-        }
-    }
-}
-
-struct RoomHardwareStripView: View {
+struct EditSpaceSheet: View {
     let folder: MachineFolder
     @ObservedObject var store: DisplayStore
+    @State private var name: String = ""
+    @State private var desc: String = ""
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        let items = store.roomMonitors(for: folder)
-        HStack(spacing: 6) {
-            Text("ROOM MONITORS:")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.secondary)
-            ForEach(items, id: \.uuid) { item in
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(item.isConnected ? Color.green : Color.secondary.opacity(0.45))
-                        .frame(width: 5, height: 5)
-                    Image(systemName: item.icon)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(item.isConnected ? .primary : .secondary)
-                    Text(item.name)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(item.isConnected ? .primary : .secondary)
-                    if !item.roleNote.isEmpty {
-                        Text("(\(item.roleNote))")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(item.isConnected ? Color.green.opacity(0.08) : Color.primary.opacity(0.04))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(item.isConnected ? Color.green.opacity(0.25) : Color.primary.opacity(0.07), lineWidth: 1)
-                )
-                .help(item.isConnected ? "\(item.name) is connected to this Mac" : "\(item.name) is not currently connected to this Mac")
-            }
-            Spacer(minLength: 0)
-        }
-    }
-}
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit Space / Room Info")
+                .font(.headline)
 
-struct PresetRowView: View {
-    let folder: MachineFolder
-    let preset: DisplayPreset
-    @ObservedObject var store: DisplayStore
-
-    var isActive: Bool {
-        if !store.currentCommand.isEmpty && store.currentCommand == preset.command {
-            return true
-        }
-        guard store.root.lastAppliedPresetID == preset.id else { return false }
-        if preset.command == "@dynamic:laptop_only" && store.connected.count == 1 {
-            return true
-        }
-        return store.detectedFolderID == folder.id
-    }
-
-    var body: some View {
-        let badges = store.monitorBadges(for: preset, in: folder)
-        HStack(spacing: 10) {
-            Button {
-                store.applyPreset(preset)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: preset.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isActive ? .green : .accentColor)
-                        .frame(width: 22)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(preset.name)
-                                .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(.primary)
-                            if isActive {
-                                Text("ACTIVE")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(Color.green.opacity(0.2)))
-                                    .foregroundStyle(.green)
-                            }
-                        }
-
-                        if !badges.isEmpty {
-                            HStack(spacing: 5) {
-                                ForEach(badges) { b in
-                                    HStack(spacing: 4) {
-                                        Image(systemName: b.icon)
-                                            .font(.system(size: 9.5, weight: .semibold))
-                                            .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
-                                        Text(b.name)
-                                            .font(.system(size: 10.5, weight: .medium))
-                                            .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
-                                        Text(b.roleLabel)
-                                            .font(.system(size: 8.5, weight: .bold))
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 1)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 3)
-                                                    .fill(b.roleColor.opacity(0.18))
-                                            )
-                                            .foregroundStyle(b.roleColor)
-                                    }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2.5)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 5)
-                                            .fill(Color.primary.opacity(0.05))
-                                    )
-                                }
-                            }
-                        } else {
-                            Text(preset.subtitle)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button("Apply") {
-                store.applyPreset(preset)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(store.busy)
-
-            Menu {
-                Button("Apply Preset") {
-                    store.applyPreset(preset)
-                }
-                Button("Overwrite with Current Screen Layout") {
-                    store.overwritePresetWithCurrent(folderID: folder.id, presetID: preset.id)
-                }
-                Button("Copy displayplacer Command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(store.resolveCommand(preset.command), forType: .string)
-                    store.statusMessage = "Copied command to clipboard"
-                }
-                Divider()
-                Menu("Move to Folder") {
-                    ForEach(store.root.folders.filter { $0.id != folder.id }) { target in
-                        Button(target.name) {
-                            store.movePreset(fromFolderID: folder.id, presetID: preset.id, toFolderID: target.id)
-                        }
-                    }
-                }
-                Divider()
-                Button("Delete Preset", role: .destructive) {
-                    store.deletePreset(folderID: folder.id, presetID: preset.id)
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 13))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Space / Room Name")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
+                TextField("e.g. 84-101, Studio A, Home Desk", text: $name)
+                    .textFieldStyle(.roundedBorder)
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Space Description Text")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Describe the monitors in this room/space", text: $desc)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                if store.root.folders.count > 1 {
+                    Button("Only Keep '\(folder.name)' on This Mac") {
+                        store.updateFolder(id: folder.id, name: name, description: desc)
+                        store.keepOnlyFolder(id: folder.id)
+                        dismiss()
+                    }
+                    .help("Removes other room tabs on fixed desktop machines that never leave this room")
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save") {
+                    store.updateFolder(id: folder.id, name: name, description: desc)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(isActive ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(isActive ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .padding(16)
+        .frame(width: 460)
+        .onAppear {
+            name = folder.name
+            desc = folder.description
+        }
     }
 }
 
@@ -1260,6 +1493,7 @@ struct MainPanelView: View {
     @State private var showingNewFolder = false
     @State private var newFolderName = ""
     @State private var newFolderDesc = ""
+    @State private var editingSpace: MachineFolder? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1268,9 +1502,9 @@ struct MainPanelView: View {
                 Image(systemName: "display.2")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.accentColor)
-                Text("Display Presets")
+                Text("Displays")
                     .font(.system(size: 15, weight: .bold))
-                Text("by Machine / Room")
+                Text(store.root.folders.count > 1 ? "Monitor History & Room Presets" : "Monitor History & Presets")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -1292,94 +1526,131 @@ struct MainPanelView: View {
             // Connected Monitors + Quick Role Matrix
             ConnectedDisplaysCard(store: store)
 
-            // Folder Tabs (84-101, 84-102, 84-105, etc.)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Text("MACHINE / CLASSROOM FOLDERS")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button {
-                        newFolderName = ""
-                        newFolderDesc = ""
-                        showingNewFolder = true
-                    } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.borderless)
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
+            // Multi-Space Tabs (automatically hidden when a desktop Mac only has 1 space!)
+            if store.root.folders.count > 1 {
+                VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
-                        ForEach(store.root.folders) { folder in
-                            let selected = store.root.selectedFolderID == folder.id
-                            let isHere = store.detectedFolderID == folder.id
-                            Button {
-                                store.root.selectedFolderID = folder.id
-                                store.save()
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: selected ? "folder.fill" : "folder")
-                                        .font(.system(size: 11))
-                                    Text(folder.name)
-                                        .font(.system(size: 12, weight: selected ? .bold : .medium))
-                                    if isHere {
-                                        Circle()
-                                            .fill(Color.green)
-                                            .frame(width: 6, height: 6)
-                                            .help("Connected monitors match \(folder.name)")
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Text("SPACES / ROOMS")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            newFolderName = ""
+                            newFolderDesc = ""
+                            showingNewFolder = true
+                        } label: {
+                            Label("Add Space", systemImage: "folder.badge.plus")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(store.root.folders) { folder in
+                                let selected = store.root.selectedFolderID == folder.id
+                                let isHere = store.detectedFolderID == folder.id
+                                Button {
+                                    store.root.selectedFolderID = folder.id
+                                    store.save()
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: selected ? "folder.fill" : "folder")
+                                            .font(.system(size: 11))
+                                        Text(folder.name)
+                                            .font(.system(size: 12, weight: selected ? .bold : .medium))
+                                        if isHere {
+                                            Circle()
+                                                .fill(Color.green)
+                                                .frame(width: 6, height: 6)
+                                                .help("Connected monitors match \(folder.name)")
+                                        }
+                                        Text("\(folder.presets.count)")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(Capsule().fill(Color.primary.opacity(0.1)))
                                     }
-                                    Text("\(folder.presets.count)")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(Capsule().fill(Color.primary.opacity(0.1)))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 7)
+                                            .fill(selected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                    )
+                                    .foregroundStyle(selected ? Color.white : Color.primary)
                                 }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 7)
-                                        .fill(selected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                )
-                                .foregroundStyle(selected ? Color.white : Color.primary)
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
 
-            // Presets inside Selected Folder
+            // Selected Space Info + Monitor History Strip + Presets
             if let folder = store.selectedFolder {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        RoomHardwareStripView(folder: folder, store: store)
+                    // Editable Space Title & Description Row
+                    HStack(spacing: 6) {
+                        Text("\(folder.name):")
+                            .font(.system(size: 11.5, weight: .bold))
+                        Text(folder.description)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Button {
+                            editingSpace = folder
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Edit space name and description text")
+
                         Spacer(minLength: 4)
-                        if store.root.folders.count > 1 {
-                            Menu {
-                                Button("Reset Default Presets (84-101, 84-102, 84-105)") {
-                                    store.root = SeedData.defaultRoot()
-                                    store.save()
-                                    store.refreshDisplays()
+
+                        if store.root.folders.count == 1 {
+                            Button {
+                                newFolderName = ""
+                                newFolderDesc = ""
+                                showingNewFolder = true
+                            } label: {
+                                Label("Add Space", systemImage: "folder.badge.plus")
+                                    .font(.system(size: 10.5))
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Add another room/space if this Mac moves between locations")
+                        }
+
+                        Menu {
+                            Button("Edit Space Name & Description…") {
+                                editingSpace = folder
+                            }
+                            if store.root.folders.count > 1 {
+                                Button("Single-Space Mode: Only Keep '\(folder.name)' on This Mac") {
+                                    store.keepOnlyFolder(id: folder.id)
                                 }
                                 Divider()
-                                Button("Delete Folder '\(folder.name)'", role: .destructive) {
+                                Button("Delete Space '\(folder.name)'", role: .destructive) {
                                     store.deleteFolder(id: folder.id)
                                 }
-                            } label: {
-                                Image(systemName: "gearshape")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
                             }
-                            .menuStyle(.borderlessButton)
-                            .frame(width: 20)
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
                         }
+                        .menuStyle(.borderlessButton)
+                        .frame(width: 20)
                     }
 
+                    // Monitor History Strip (click any monitor to edit its name/note or hide it in this space)
+                    RoomHardwareStripView(folder: folder, store: store)
+
+                    // Presets List
                     if isStandaloneWindow {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 6) {
@@ -1397,7 +1668,7 @@ struct MainPanelView: View {
                                 }
                             }
                         }
-                        .frame(height: 340)
+                        .frame(height: 360)
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(folder.presets) { preset in
@@ -1450,20 +1721,20 @@ struct MainPanelView: View {
             }
         }
         .padding(12)
-        .frame(width: isStandaloneWindow ? nil : 585)
-        .frame(minWidth: 585, minHeight: isStandaloneWindow ? 640 : nil)
+        .frame(width: isStandaloneWindow ? nil : 600)
+        .frame(minWidth: 600, minHeight: isStandaloneWindow ? 640 : nil)
         .sheet(isPresented: $showingNewFolder) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("New Machine / Classroom Folder")
+                Text("Add Space / Room")
                     .font(.headline)
-                TextField("Folder Name (e.g. 84-101, 84-102, 84-105, Home Studio)", text: $newFolderName)
+                TextField("Space Name (e.g. 84-101, Studio A, Home Office)", text: $newFolderName)
                     .textFieldStyle(.roundedBorder)
-                TextField("Description (e.g. 3 Monitors · Main + Laptop + Broadcast)", text: $newFolderDesc)
+                TextField("Description (e.g. Desk Monitor + Wall TV)", text: $newFolderDesc)
                     .textFieldStyle(.roundedBorder)
                 HStack {
                     Spacer()
                     Button("Cancel") { showingNewFolder = false }
-                    Button("Create Folder") {
+                    Button("Create Space") {
                         store.addFolder(name: newFolderName, description: newFolderDesc)
                         showingNewFolder = false
                     }
@@ -1472,7 +1743,10 @@ struct MainPanelView: View {
                 }
             }
             .padding(16)
-            .frame(width: 380)
+            .frame(width: 400)
+        }
+        .sheet(item: $editingSpace) { sp in
+            EditSpaceSheet(folder: sp, store: store)
         }
     }
 }
@@ -1489,9 +1763,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
         if window == nil {
             let rootView = MainPanelView(store: activeStore, isStandaloneWindow: true)
             let w = NSWindow(contentViewController: NSHostingController(rootView: rootView))
-            w.title = "Displays · Machine & Classroom Monitor Presets"
+            w.title = "Displays · Monitor History & Layout Presets"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.setContentSize(NSSize(width: 600, height: 680))
+            w.setContentSize(NSSize(width: 620, height: 680))
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -1510,8 +1784,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // Pin preferred position near the right side of the menu bar (next to Control Center / Clock)
-        // so that on a 1080p screen with 30+ menu bar icons, macOS never pushes Displays off the left edge.
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "NSStatusItem Preferred Position DisplaysStatusItem") == nil {
             defaults.set(110.0, forKey: "NSStatusItem Preferred Position DisplaysStatusItem")
@@ -1531,7 +1803,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             img?.isTemplate = true
             button.image = img
             button.imagePosition = .imageLeading
-            button.title = " 101"
+            button.title = " Disp"
             button.target = self
             button.action = #selector(togglePopover(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -1555,7 +1827,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         updateStatusButtonTitle()
 
-        // Pop open the menu bar popover on launch so you immediately see where the menu bar icon sits.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.showPopover()
         }
@@ -1587,8 +1858,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         DisplayStore.shared.refreshDisplays()
         if let hosting = pop.contentViewController as? NSHostingController<MainPanelView> {
-            let fit = hosting.sizeThatFits(in: NSSize(width: 585, height: 1200))
-            pop.contentSize = NSSize(width: max(585, fit.width), height: max(480, fit.height))
+            let fit = hosting.sizeThatFits(in: NSSize(width: 600, height: 1200))
+            pop.contentSize = NSSize(width: max(600, fit.width), height: max(460, fit.height))
         }
         if button.window != nil && button.window!.frame.origin.x > 0 {
             pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
