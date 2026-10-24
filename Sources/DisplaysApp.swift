@@ -87,67 +87,69 @@ struct PresetsRoot: Codable, Equatable {
 
 enum SeedData {
     // 84-101 Display UUIDs (verified live from this machine)
-    static let c27UUID = "62965DD7-A85F-4301-AAAF-57ACDD304B01"      // Lenovo C27-30 (27" Desk Monitor, 75Hz)
+    static let c27UUID = "62965DD7-A85F-4301-AAAF-57ACDD304B01"      // Lenovo C27-30 (2) (27" Desk Main Monitor, 75Hz)
+    static let c27StudioAUUID = "STUDIO-A-C27-30-1"                  // Lenovo C27-30 (1) (Studio A Mac Desk Monitor)
     static let mbpUUID = "37D8832A-2D66-02CA-B9F7-8F30A301B230"      // MacBook Pro 16" Built-in Liquid Retina XDR
-    static let bmdUUID = "9D513093-8CA9-4BEB-9D4E-B22ABE9D9996"      // Blackmagic (Room Broadcast / Projector, 60Hz)
+    static let bmdUUID = "9D513093-8CA9-4BEB-9D4E-B22ABE9D9996"      // Blackmagic (84-101 Room TV, 60Hz)
 
     // 84-102 Display UUIDs (from ~/.config/displayplacer/presets.conf & 20-display.zsh)
     static let ls32UUID = "3EC6A2A1-980C-4833-9DFB-1C7E6DB86474"     // Samsung 32" External
-    static let extronUUID = "59881A55-35CB-4FF8-A3E4-1477F91FC986"   // ExtronScalerD Classroom Projector
-    static let r102MonAUUID = "862BBDA6-F3BA-44EF-89C9-1B04C8BF492F" // 84-102 Monitor A
-    static let r102MonBUUID = "7E9A1BE6-39AD-4C09-9E9D-EE8D44400E05" // 84-102 Monitor B
+    static let extronUUID = "59881A55-35CB-4FF8-A3E4-1477F91FC986"   // ExtronScalerD Classroom TV / Projector
+    static let r102MonAUUID = "862BBDA6-F3BA-44EF-89C9-1B04C8BF492F" // 84-102 Room TV
+    static let r102MonBUUID = "7E9A1BE6-39AD-4C09-9E9D-EE8D44400E05" // 84-102 Desk Monitor
 
     static func defaultRoot() -> PresetsRoot {
         let folder101 = MachineFolder(
             id: "84-101",
             name: "84-101",
-            description: "3 Displays · C27-30 (Main) + MacBook Pro + Blackmagic Broadcast",
+            description: "Studio A · C27-30 (2) Desk + Room TV (Blackmagic) + MacBook (C27-30 (1) on Studio A Mac)",
             signatureUUIDs: [c27UUID, bmdUUID],
             displayAliases: [
-                c27UUID: "C27-30 (27\" Desk)",
-                mbpUUID: "MacBook Pro (Built-in)",
-                bmdUUID: "Blackmagic (Broadcast)",
+                c27UUID: "C27-30 (2)",
+                c27StudioAUUID: "C27-30 (1) · Studio A Mac",
+                mbpUUID: "MacBook",
+                bmdUUID: "TV (Blackmagic)",
             ],
             presets: [
                 DisplayPreset(
                     id: "101-mirror-all-3",
-                    name: "Broadcast All 3 (Mirror Everything)",
-                    subtitle: "C27-30 + MacBook + Blackmagic all show the same 1080p screen",
+                    name: "All 3 Mirrored to TV",
+                    subtitle: "C27-30 (2) + MacBook + Room TV all show the same 1080p screen",
                     icon: "rectangle.on.rectangle.circle.fill",
                     command: #"displayplacer "id:\#(c27UUID)+\#(mbpUUID)+\#(bmdUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "101-broadcast-c27-extend-mbp",
-                    name: "Broadcast C27-30 · MacBook Extended (Private Notes)",
-                    subtitle: "C27-30 mirrored to Blackmagic for class; MacBook separate on right",
+                    name: "C27-30 (2) on TV · MacBook Extended",
+                    subtitle: "C27-30 (2) mirrored to Room TV; MacBook extended right",
                     icon: "tv.and.mediabox",
                     command: #"displayplacer "id:\#(c27UUID)+\#(bmdUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "101-broadcast-mbp-extend-c27",
-                    name: "Broadcast MacBook · C27-30 Extended (Private Desk)",
-                    subtitle: "MacBook mirrored to Blackmagic for class; C27-30 separate on left",
+                    name: "MacBook on TV · C27-30 (2) Extended",
+                    subtitle: "MacBook mirrored to Room TV; C27-30 (2) extended left",
                     icon: "laptopcomputer.and.ipad",
                     command: #"displayplacer "id:\#(mbpUUID)+\#(bmdUUID) res:1920x1080 hz:120 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(-1920,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "101-desk-mirror-extend-bmd",
-                    name: "Mirror C27-30 + MacBook · Extend Blackmagic Stage",
-                    subtitle: "C27-30 + MacBook mirrored on desk; Blackmagic is a 2nd extended desktop",
+                    name: "C27-30 (2) + MacBook Mirrored · TV Extended",
+                    subtitle: "C27-30 (2) + MacBook mirrored on desk; Room TV extended right",
                     icon: "rectangle.split.2x1.fill",
                     command: #"displayplacer "id:\#(c27UUID)+\#(mbpUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(bmdUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "101-extend-all-3",
-                    name: "All 3 Extended Side-by-Side (3 Separate Desktops)",
-                    subtitle: "C27-30 (Center Main) · MacBook (Left) · Blackmagic (Right)",
+                    name: "All 3 Extended (3 Separate Desktops)",
+                    subtitle: "MacBook (Left) · C27-30 (2) (Main) · Room TV (Right)",
                     icon: "rectangle.split.3x1.fill",
                     command: #"displayplacer "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(-1728,0) degree:0" "id:\#(bmdUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "101-off-air-privacy",
-                    name: "Off-Air Privacy (Blackmagic Off · C27-30 + MacBook Extended)",
-                    subtitle: "Mutes Blackmagic broadcast output; keeps C27-30 + MacBook active",
+                    name: "TV Off · C27-30 (2) + MacBook Extended",
+                    subtitle: "Room TV off; C27-30 (2) Main + MacBook extended right",
                     icon: "eye.slash.fill",
                     command: #"displayplacer "id:\#(c27UUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(0,0) degree:0" "id:\#(mbpUUID) res:1728x1117 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0" "id:\#(bmdUUID) enabled:false""#
                 ),
@@ -157,48 +159,48 @@ enum SeedData {
         let folder102 = MachineFolder(
             id: "84-102",
             name: "84-102",
-            description: "2 External Displays · Teacher Desk + Extron Classroom Broadcast",
+            description: "Lab 84-102 · Desk Monitor + Extron Room TV + MacBook",
             signatureUUIDs: [ls32UUID, extronUUID, r102MonAUUID, r102MonBUUID],
             displayAliases: [
-                ls32UUID: "Samsung 32\" Desk",
-                extronUUID: "ExtronScalerD (Projector)",
-                r102MonAUUID: "84-102 Broadcast",
-                r102MonBUUID: "84-102 Desk Monitor",
-                mbpUUID: "MacBook Pro (Built-in)",
+                ls32UUID: "32\" Desk",
+                extronUUID: "TV (Extron)",
+                r102MonAUUID: "TV (84-102)",
+                r102MonBUUID: "Desk Monitor",
+                mbpUUID: "MacBook",
             ],
             presets: [
                 DisplayPreset(
                     id: "102-mirror-broadcast-extend-desk",
-                    name: "Broadcast Mirror + Desk Extended (84-102 Standard)",
-                    subtitle: "Mirrors MacBook to classroom broadcast; second monitor extended right",
+                    name: "MacBook on TV · Desk Extended",
+                    subtitle: "Mirrors MacBook to 84-102 TV; Desk Monitor extended right",
                     icon: "tv.and.mediabox",
                     command: #"displayplacer "id:\#(r102MonAUUID)+\#(mbpUUID) res:1920x1080 hz:30 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0" "id:\#(r102MonBUUID) res:1920x1080 hz:75 color_depth:8 enabled:true scaling:off origin:(1920,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "102-side-by-side",
-                    name: "All Displays Side-by-Side (32\" + MacBook + Extron)",
-                    subtitle: "Extended across 32\" desk monitor, MacBook, and ExtronScalerD",
+                    name: "All 3 Extended (32\" Desk + MacBook + Extron TV)",
+                    subtitle: "Extended across 32\" Desk, MacBook, and Extron TV",
                     icon: "rectangle.split.3x1.fill",
                     command: #"displayplacer "id:\#(ls32UUID) res:1920x1080 hz:30 color_depth:8 enabled:true scaling:on origin:(0,0) degree:0" "id:\#(mbpUUID) res:1920x1080 hz:120 color_depth:8 enabled:true scaling:on origin:(1920,0) degree:0" "id:\#(extronUUID) res:1920x1080 hz:60 color_depth:8 enabled:true scaling:on origin:(3840,0) degree:0""#
                 ),
                 DisplayPreset(
                     id: "102-dynamic-mirror-all",
-                    name: "Mirror All Connected Displays (Broadcast Everything)",
-                    subtitle: "Mirrors all connected monitors in 84-102 to the main 1080p screen",
+                    name: "All Mirrored to TV",
+                    subtitle: "Mirrors all connected monitors in 84-102",
                     icon: "rectangle.on.rectangle.circle.fill",
                     command: "@dynamic:mirror_all"
                 ),
                 DisplayPreset(
                     id: "102-dynamic-extend-all",
-                    name: "Extend All Connected Displays (Side-by-Side)",
-                    subtitle: "Places connected monitors left-to-right with no mirroring",
+                    name: "All Extended Side-by-Side",
+                    subtitle: "Separate desktops across all connected monitors",
                     icon: "squares.leading.rectangle",
                     command: "@dynamic:extend_all"
                 ),
                 DisplayPreset(
                     id: "102-laptop-only",
-                    name: "Laptop Only (Private / Unplugged)",
-                    subtitle: "MacBook built-in Retina display at 1728x1117 @ 120Hz",
+                    name: "TV Off · MacBook Only",
+                    subtitle: "External displays off; MacBook only",
                     icon: "laptopcomputer",
                     command: "@dynamic:laptop_only"
                 ),
@@ -208,37 +210,37 @@ enum SeedData {
         let folder105 = MachineFolder(
             id: "84-105",
             name: "84-105",
-            description: "2 Displays · MacBook Pro + 84-105 Classroom Broadcast",
+            description: "Lab 84-105 · Room TV + MacBook",
             signatureUUIDs: [],
             displayAliases: [
-                mbpUUID: "MacBook Pro (Built-in)",
+                mbpUUID: "MacBook",
             ],
             presets: [
                 DisplayPreset(
                     id: "105-mirror-all",
-                    name: "Broadcast Mirror (Mirror MacBook + Classroom Display)",
-                    subtitle: "Mirrors MacBook and classroom projector/TV at 1080p",
+                    name: "MacBook Mirrored to TV",
+                    subtitle: "MacBook and 84-105 Room TV show the same 1080p screen",
                     icon: "rectangle.on.rectangle.circle.fill",
                     command: "@dynamic:mirror_all"
                 ),
                 DisplayPreset(
                     id: "105-extend-all",
-                    name: "Extend Classroom Display (MacBook Private + Projector Right)",
-                    subtitle: "MacBook as main screen (0,0) with classroom display extended to (1920,0)",
+                    name: "MacBook Main · TV Extended Right",
+                    subtitle: "MacBook as Main; 84-105 TV extended right",
                     icon: "rectangle.split.2x1.fill",
                     command: "@dynamic:extend_all"
                 ),
                 DisplayPreset(
                     id: "105-broadcast-external-extend-mbp",
-                    name: "External Main + MacBook Private Right",
-                    subtitle: "External monitor as Main (0,0); MacBook extended to the right",
+                    name: "TV Main · MacBook Extended Right",
+                    subtitle: "84-105 TV as Main; MacBook extended right",
                     icon: "tv.and.mediabox",
                     command: "@dynamic:broadcast_main_extend_builtin"
                 ),
                 DisplayPreset(
                     id: "105-laptop-only",
-                    name: "Off-Air Privacy (Laptop Only)",
-                    subtitle: "Disables external broadcast display so only MacBook stays on",
+                    name: "TV Off · MacBook Only",
+                    subtitle: "Mutes 84-105 Room TV; MacBook stays on",
                     icon: "eye.slash.fill",
                     command: "@dynamic:laptop_only"
                 ),
@@ -246,9 +248,9 @@ enum SeedData {
         )
 
         return PresetsRoot(
-            version: 1,
+            version: 2,
             selectedFolderID: "84-101",
-            lastAppliedPresetID: "101-mirror-all-3",
+            lastAppliedPresetID: nil,
             folders: [folder101, folder102, folder105]
         )
     }
@@ -279,7 +281,8 @@ final class DisplayStore: ObservableObject {
     static func loadOrSeed() -> PresetsRoot {
         if let data = try? Data(contentsOf: configFile),
            let decoded = try? JSONDecoder().decode(PresetsRoot.self, from: data),
-           !decoded.folders.isEmpty {
+           !decoded.folders.isEmpty,
+           decoded.version >= 2 {
             return decoded
         }
         let seeded = SeedData.defaultRoot()
@@ -916,6 +919,204 @@ struct SavePresetSheet: View {
     }
 }
 
+struct PresetMonitorBadge: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let icon: String
+    let roleLabel: String
+    let roleColor: Color
+}
+
+extension DisplayStore {
+    func shortDisplayInfo(for uuid: String, in folder: MachineFolder) -> (name: String, icon: String) {
+        let raw = folder.displayAliases[uuid]
+            ?? connected.first(where: { $0.id == uuid })?.name
+            ?? (uuid == SeedData.mbpUUID ? "MacBook" : "Display")
+        let lower = raw.lowercased()
+        let icon: String
+        if lower.contains("macbook") || lower.contains("laptop") || uuid == SeedData.mbpUUID {
+            icon = "laptopcomputer"
+        } else if lower.contains("tv") || lower.contains("blackmagic") || lower.contains("extron") || lower.contains("broadcast") || lower.contains("proj") {
+            icon = "tv.fill"
+        } else {
+            icon = "display"
+        }
+        return (raw, icon)
+    }
+
+    func monitorBadges(for preset: DisplayPreset, in folder: MachineFolder) -> [PresetMonitorBadge] {
+        let cmd = preset.command.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cmd.hasPrefix("@dynamic:") {
+            let mode = cmd.replacingOccurrences(of: "@dynamic:", with: "")
+            let tvName = folder.id == "84-102" ? "TV (Extron)" : "Room TV"
+            switch mode {
+            case "mirror_all":
+                return [
+                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "MIRROR", roleColor: .green),
+                ]
+            case "extend_all":
+                return [
+                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "EXTEND RIGHT", roleColor: .purple),
+                ]
+            case "broadcast_main_extend_builtin":
+                return [
+                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "EXTEND RIGHT", roleColor: .purple),
+                ]
+            case "laptop_only":
+                return [
+                    PresetMonitorBadge(id: "dyn-mbp", name: "MacBook", icon: "laptopcomputer", roleLabel: "MAIN", roleColor: .blue),
+                    PresetMonitorBadge(id: "dyn-tv", name: tvName, icon: "tv.fill", roleLabel: "OFF", roleColor: .secondary),
+                ]
+            default:
+                return []
+            }
+        }
+
+        // Parse quoted segments in `displayplacer "..." "..."`
+        var badges: [PresetMonitorBadge] = []
+        let pattern = #""([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsRange = NSRange(cmd.startIndex..<cmd.endIndex, in: cmd)
+        let matches = regex.matches(in: cmd, range: nsRange)
+
+        for (segIdx, m) in matches.enumerated() {
+            guard let r = Range(m.range(at: 1), in: cmd) else { continue }
+            let seg = String(cmd[r])
+            var idPart = ""
+            var originX = 0
+            var isOff = seg.localizedCaseInsensitiveContains("enabled:false")
+
+            for tok in seg.split(separator: " ") {
+                let s = String(tok)
+                if s.hasPrefix("id:") {
+                    idPart = s.replacingOccurrences(of: "id:", with: "")
+                } else if s.hasPrefix("origin:(") {
+                    let coords = s.replacingOccurrences(of: "origin:(", with: "").replacingOccurrences(of: ")", with: "")
+                    if let firstNum = coords.split(separator: ",").first, let xVal = Int(firstNum) {
+                        originX = xVal
+                    }
+                } else if s == "enabled:false" {
+                    isOff = true
+                }
+            }
+
+            let uuids = idPart.split(separator: "+").map(String.init)
+            let isMainGroup = !isOff && (originX == 0 && segIdx == 0)
+
+            for (uIdx, uuid) in uuids.enumerated() {
+                let info = shortDisplayInfo(for: uuid, in: folder)
+                let roleLabel: String
+                let roleColor: Color
+                if isOff {
+                    roleLabel = "OFF"
+                    roleColor = .secondary
+                } else if isMainGroup {
+                    if uIdx == 0 {
+                        roleLabel = "MAIN"
+                        roleColor = .blue
+                    } else {
+                        roleLabel = "MIRROR"
+                        roleColor = .green
+                    }
+                } else if uuids.count > 1 && uIdx > 0 {
+                    roleLabel = "MIRROR"
+                    roleColor = .green
+                } else if originX < 0 {
+                    roleLabel = "EXT LEFT"
+                    roleColor = .purple
+                } else {
+                    roleLabel = "EXT RIGHT"
+                    roleColor = .purple
+                }
+                badges.append(PresetMonitorBadge(
+                    id: "\(preset.id)-\(uuid)-\(segIdx)-\(uIdx)",
+                    name: info.name,
+                    icon: info.icon,
+                    roleLabel: roleLabel,
+                    roleColor: roleColor
+                ))
+            }
+        }
+        return badges
+    }
+
+    func roomMonitors(for folder: MachineFolder) -> [(uuid: String, name: String, icon: String, roleNote: String, isConnected: Bool)] {
+        let connectedIDs = Set(connected.map(\.id))
+        if folder.id == "84-101" {
+            return [
+                (SeedData.c27UUID, "C27-30 (2)", "display", "Main Desk", connectedIDs.contains(SeedData.c27UUID)),
+                (SeedData.bmdUUID, "TV (Blackmagic)", "tv.fill", "Room TV", connectedIDs.contains(SeedData.bmdUUID)),
+                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
+                (SeedData.c27StudioAUUID, "C27-30 (1)", "display", "Studio A Mac", connectedIDs.contains(SeedData.c27StudioAUUID)),
+            ]
+        } else if folder.id == "84-102" {
+            return [
+                (SeedData.ls32UUID, "32\" Desk", "display", "Desk", connectedIDs.contains(SeedData.ls32UUID) || connectedIDs.contains(SeedData.r102MonBUUID)),
+                (SeedData.extronUUID, "TV (Extron)", "tv.fill", "Room TV", connectedIDs.contains(SeedData.extronUUID) || connectedIDs.contains(SeedData.r102MonAUUID)),
+                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
+            ]
+        } else if folder.id == "84-105" {
+            let hasExt = connected.contains(where: { !$0.isBuiltIn })
+            return [
+                ("105-tv", "Room TV", "tv.fill", "84-105 TV", hasExt),
+                (SeedData.mbpUUID, "MacBook", "laptopcomputer", "Built-in", connectedIDs.contains(SeedData.mbpUUID)),
+            ]
+        } else {
+            return folder.displayAliases.sorted(by: { $0.value < $1.value }).map { (uuid, name) in
+                let info = shortDisplayInfo(for: uuid, in: folder)
+                return (uuid, info.name, info.icon, "", connectedIDs.contains(uuid))
+            }
+        }
+    }
+}
+
+struct RoomHardwareStripView: View {
+    let folder: MachineFolder
+    @ObservedObject var store: DisplayStore
+
+    var body: some View {
+        let items = store.roomMonitors(for: folder)
+        HStack(spacing: 6) {
+            Text("ROOM MONITORS:")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+            ForEach(items, id: \.uuid) { item in
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(item.isConnected ? Color.green : Color.secondary.opacity(0.45))
+                        .frame(width: 5, height: 5)
+                    Image(systemName: item.icon)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(item.isConnected ? .primary : .secondary)
+                    Text(item.name)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(item.isConnected ? .primary : .secondary)
+                    if !item.roleNote.isEmpty {
+                        Text("(\(item.roleNote))")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(item.isConnected ? Color.green.opacity(0.08) : Color.primary.opacity(0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(item.isConnected ? Color.green.opacity(0.25) : Color.primary.opacity(0.07), lineWidth: 1)
+                )
+                .help(item.isConnected ? "\(item.name) is connected to this Mac" : "\(item.name) is not currently connected to this Mac")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 struct PresetRowView: View {
     let folder: MachineFolder
     let preset: DisplayPreset
@@ -925,10 +1126,15 @@ struct PresetRowView: View {
         if !store.currentCommand.isEmpty && store.currentCommand == preset.command {
             return true
         }
-        return store.root.lastAppliedPresetID == preset.id
+        guard store.root.lastAppliedPresetID == preset.id else { return false }
+        if preset.command == "@dynamic:laptop_only" && store.connected.count == 1 {
+            return true
+        }
+        return store.detectedFolderID == folder.id
     }
 
     var body: some View {
+        let badges = store.monitorBadges(for: preset, in: folder)
         HStack(spacing: 10) {
             Button {
                 store.applyPreset(preset)
@@ -937,12 +1143,12 @@ struct PresetRowView: View {
                     Image(systemName: preset.icon)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(isActive ? .green : .accentColor)
-                        .frame(width: 24)
+                        .frame(width: 22)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Text(preset.name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12.5, weight: .semibold))
                                 .foregroundStyle(.primary)
                             if isActive {
                                 Text("ACTIVE")
@@ -953,12 +1159,43 @@ struct PresetRowView: View {
                                     .foregroundStyle(.green)
                             }
                         }
-                        Text(preset.subtitle)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+
+                        if !badges.isEmpty {
+                            HStack(spacing: 5) {
+                                ForEach(badges) { b in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: b.icon)
+                                            .font(.system(size: 9.5, weight: .semibold))
+                                            .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                                        Text(b.name)
+                                            .font(.system(size: 10.5, weight: .medium))
+                                            .foregroundStyle(b.roleLabel == "OFF" ? .secondary : .primary)
+                                        Text(b.roleLabel)
+                                            .font(.system(size: 8.5, weight: .bold))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 3)
+                                                    .fill(b.roleColor.opacity(0.18))
+                                            )
+                                            .foregroundStyle(b.roleColor)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2.5)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 5)
+                                            .fill(Color.primary.opacity(0.05))
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(preset.subtitle)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
                 }
                 .contentShape(Rectangle())
             }
@@ -1004,7 +1241,7 @@ struct PresetRowView: View {
             .frame(width: 22)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 7)
                 .fill(isActive ? Color.accentColor.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
@@ -1120,10 +1357,8 @@ struct MainPanelView: View {
             if let folder = store.selectedFolder {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("\(folder.name) · \(folder.description)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                        RoomHardwareStripView(folder: folder, store: store)
+                        Spacer(minLength: 4)
                         if store.root.folders.count > 1 {
                             Menu {
                                 Button("Reset Default Presets (84-101, 84-102, 84-105)") {
@@ -1215,8 +1450,8 @@ struct MainPanelView: View {
             }
         }
         .padding(12)
-        .frame(width: isStandaloneWindow ? nil : 550)
-        .frame(minWidth: 550, minHeight: isStandaloneWindow ? 640 : nil)
+        .frame(width: isStandaloneWindow ? nil : 585)
+        .frame(minWidth: 585, minHeight: isStandaloneWindow ? 640 : nil)
         .sheet(isPresented: $showingNewFolder) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("New Machine / Classroom Folder")
@@ -1352,8 +1587,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         DisplayStore.shared.refreshDisplays()
         if let hosting = pop.contentViewController as? NSHostingController<MainPanelView> {
-            let fit = hosting.sizeThatFits(in: NSSize(width: 550, height: 1200))
-            pop.contentSize = NSSize(width: max(550, fit.width), height: max(480, fit.height))
+            let fit = hosting.sizeThatFits(in: NSSize(width: 585, height: 1200))
+            pop.contentSize = NSSize(width: max(585, fit.width), height: max(480, fit.height))
         }
         if button.window != nil && button.window!.frame.origin.x > 0 {
             pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
