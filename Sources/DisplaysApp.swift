@@ -320,6 +320,22 @@ struct ConnectedDisplay: Identifiable, Equatable {
     let isMain: Bool
     let isBuiltIn: Bool
     let mirrorMasterID: UInt32
+    let originX: Int
+    let originY: Int
+
+    var positionLabel: String {
+        if isMain {
+            return "CENTER MAIN (\(originX),\(originY))"
+        } else if mirrorMasterID != 0 {
+            return "MIRROR (\(originX),\(originY))"
+        } else if originX < 0 {
+            return "LEFT (\(originX),\(originY))"
+        } else if originX > 0 {
+            return "RIGHT (\(originX),\(originY))"
+        } else {
+            return "(\(originX),\(originY))"
+        }
+    }
 }
 
 struct MonitorRecord: Identifiable, Codable, Equatable {
@@ -544,6 +560,8 @@ final class DisplayStore: ObservableObject {
         var currentScaling = false
         var currentEnabled = true
         var currentMain = false
+        var currentOriginX = 0
+        var currentOriginY = 0
 
         func flushBlock() {
             guard !currentUUID.isEmpty else { return }
@@ -563,7 +581,9 @@ final class DisplayStore: ObservableObject {
                 enabled: currentEnabled,
                 isMain: currentMain || (CGDisplayIsMain(currentCGID) != 0),
                 isBuiltIn: isBuiltIn,
-                mirrorMasterID: mirrorMaster
+                mirrorMasterID: mirrorMaster,
+                originX: currentOriginX,
+                originY: currentOriginY
             ))
             currentUUID = ""
             currentCGID = 0
@@ -573,6 +593,8 @@ final class DisplayStore: ObservableObject {
             currentScaling = false
             currentEnabled = true
             currentMain = false
+            currentOriginX = 0
+            currentOriginY = 0
         }
 
         for rawLine in out.components(separatedBy: .newlines) {
@@ -596,6 +618,16 @@ final class DisplayStore: ObservableObject {
                 currentEnabled = line.localizedCaseInsensitiveContains("true")
             } else if line.hasPrefix("Origin:") {
                 currentMain = line.localizedCaseInsensitiveContains("main display")
+                if let openIdx = line.firstIndex(of: "("),
+                   let closeIdx = line.firstIndex(of: ")"),
+                   openIdx < closeIdx {
+                    let coordStr = line[line.index(after: openIdx)..<closeIdx]
+                    let parts = coordStr.split(separator: ",")
+                    if parts.count == 2 {
+                        currentOriginX = Int(parts[0].trimmingCharacters(in: .whitespaces)) ?? 0
+                        currentOriginY = Int(parts[1].trimmingCharacters(in: .whitespaces)) ?? 0
+                    }
+                }
             } else if line.hasPrefix("displayplacer ") {
                 finalCmd = line
             }
@@ -629,6 +661,8 @@ final class DisplayStore: ObservableObject {
                     newRoles[d.id] = .main
                 } else if d.mirrorMasterID != 0 {
                     newRoles[d.id] = .mirrorMain
+                } else if d.originX < 0 {
+                    newRoles[d.id] = .extendLeft
                 } else {
                     newRoles[d.id] = .extendRight
                 }
@@ -1204,9 +1238,16 @@ struct ConnectedDisplaysCard: View {
                                         .padding(.vertical, 1)
                                         .background(RoundedRectangle(cornerRadius: 3).fill(Color.green.opacity(0.2)))
                                         .foregroundStyle(.green)
+                                } else if !d.isMain {
+                                    Text(d.originX < 0 ? "LEFT (\(d.originX),\(d.originY))" : "RIGHT (\(d.originX),\(d.originY))")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.purple.opacity(0.2)))
+                                        .foregroundStyle(.purple)
                                 }
                             }
-                            Text("\(d.resolution) @ \(d.hz)Hz · \(d.typeLabel)")
+                            Text("\(d.resolution) @ \(d.hz)Hz · \(d.positionLabel) · \(d.typeLabel)")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
