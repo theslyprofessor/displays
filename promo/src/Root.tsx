@@ -9,10 +9,69 @@ import {
   QUIETPLEASE_SPEC,
   TRACKCASCADE_SPEC,
 } from "./ProductPromoVideos";
+import {
+  AmbientFluidLaunch,
+  BarStageFluidLaunch,
+  BlackboxFluidLaunch,
+} from "./FluidProductShowcases";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
+      <Composition
+        id="BlackboxFluidLaunch"
+        component={BlackboxFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1920}
+        height={1080}
+        defaultProps={{ vertical: false }}
+      />
+      <Composition
+        id="BlackboxFluidReel"
+        component={BlackboxFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1080}
+        height={1920}
+        defaultProps={{ vertical: true }}
+      />
+      <Composition
+        id="AmbientFluidLaunch"
+        component={AmbientFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1920}
+        height={1080}
+        defaultProps={{ vertical: false }}
+      />
+      <Composition
+        id="AmbientFluidReel"
+        component={AmbientFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1080}
+        height={1920}
+        defaultProps={{ vertical: true }}
+      />
+      <Composition
+        id="BarStageFluidLaunch"
+        component={BarStageFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1920}
+        height={1080}
+        defaultProps={{ vertical: false }}
+      />
+      <Composition
+        id="BarStageFluidReel"
+        component={BarStageFluidLaunch}
+        durationInFrames={1800}
+        fps={60}
+        width={1080}
+        height={1920}
+        defaultProps={{ vertical: true }}
+      />
       <Composition
         id="DisplaysLaunch"
         component={DisplaysLaunchVideo}
